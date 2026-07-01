@@ -84,6 +84,10 @@ def __main__():
         time_name = parse_time_name_hourly()["hourly_name"]
         if time_name != old_time_name:
             store_data(data,old_time_name)
+            data = {}
+            markets_metadata = get_current_market_names(time_name)
+            for market in markets:
+                data[market] = {"metadata": markets_metadata[market], "all_clobs": []}
         old_time_name = time_name
         for market in markets:
             market_metadata = data[market]["metadata"]
