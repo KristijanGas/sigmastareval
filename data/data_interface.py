@@ -69,3 +69,10 @@ def parse_time_name_hourly():
     }
     #print(ret)
     return ret
+
+def parse_time_name_5m():
+    et_now = datetime.now(ZoneInfo("America/New_York"))
+
+    unix_timestamp = int(et_now.timestamp())/300
+    unix_timestamp = int(unix_timestamp)*300
+    return unix_timestamp
