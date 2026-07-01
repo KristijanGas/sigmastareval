@@ -8,7 +8,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 import gzip
 
-markets = ["bitcoin-up-or-down","ethereum-up-or-down","solana-up-or-down","xrp-up-or-down"]
+markets = [("bitcoin-up-or-down","BTCUSDT"),("ethereum-up-or-down","ETHUSDT"),("solana-up-or-down","SOLUSDT"),("xrp-up-or-down","XRPUSDT")]
 #markets = ["bitcoin-up-or-down"]
 #https://gamma-api.polymarket.com/events?slug=bitcoin-up-or-down-june-30-2026-2pm-et
 #https://clob.polymarket.com/book?token_id=54723568072009946861830956098453721516917366403655545781627131273815785194717 # token moras izvadit iz ovog prvog i onda koristit
@@ -21,7 +21,10 @@ markets = ["bitcoin-up-or-down","ethereum-up-or-down","solana-up-or-down","xrp-u
 def get_current_market_names(time_name):
     
     markets_metadata = {}
-    for market in markets:
+    for market_binancelookup in markets:
+        market, market_binance = market_binancelookup
+        
+        #print(f"Fetching market metadata for {market} at {time_name}")
         full_name = f"{market}-{time_name}"
         path = f"https://gamma-api.polymarket.com/events?slug={full_name}"
         #print(path)
@@ -59,21 +62,36 @@ def get_clob_data(market_metadata):
         clobs.append((token_id,market_data))
     return clobs
 
+def get_price_data(market_binance):
+    path = f"https://api.binance.com/api/v3/ticker/price?symbol={market_binance}"
+    request = urllib.request.Request(
+        path,
+        headers={
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "application/json, text/plain, */*",
+            "Referer": "https://polymarket.com/",
+        },
+    )
+    with urllib.request.urlopen(request, timeout=20) as url:
+        market_data = json.loads(url.read().decode())
+
+    timestamp = datetime.now(ZoneInfo("America/New_York")).timestamp()
+    market_data["timestamp"] = timestamp
+    #print(f"Fetched price data for {market_binance}: {market_data}")
+    return market_data
+
 def store_data(data, time_name):
-    for market in markets:
-        market_data = data[market]
-        metadata = market_data["metadata"]
-        all_clobs = market_data["all_clobs"]
+    for market_binancelookup in markets:
+        market, market_binance = market_binancelookup
         store_path = f"datasets/{market}/{market}-{time_name}.gz"
         # create file
 
 #reading it badck
 #with gzip.open("data.json.gz", "rt", encoding="utf-8") as f:
 #    data = json.load(f)
-
         os.makedirs(os.path.dirname(store_path), exist_ok=True)
         with gzip.open(store_path, "wt", encoding="utf-8") as f:
-            json.dump({"metadata": metadata, "all_clobs": all_clobs}, f)
+            json.dump(data[market], f)
         print(f"Stored data for {market} at {store_path}")
 
 
@@ -82,24 +100,39 @@ def __main__():
     markets_metadata = get_current_market_names(old_time_name)
     print(old_time_name)
     data = {}
-    for market in markets:
-        data[market] = {"metadata": markets_metadata[market], "all_clobs": []}
+    for market_binancelookup in markets:
+        market, market_binance = market_binancelookup
+        data[market] = {"metadata_start": markets_metadata[market], "all_clobs": [], "all_prices": [], "metadata_end": None}
     ind = 0
     while 1:
         time_name = parse_time_name_hourly()["hourly_name"]
         if time_name != old_time_name:
+            markets_metadata_old = get_current_market_names(old_time_name)
+            data[market]["metadata_end"] = markets_metadata_old[market]
+            #print(data[market]["metadata_end"])
             store_data(data,old_time_name)
+
+            #new batch
+
             data = {}
             markets_metadata = get_current_market_names(time_name)
-            for market in markets:
-                data[market] = {"metadata": markets_metadata[market], "all_clobs": []}
+            for market_binancelookup in markets:
+                market, market_binance = market_binancelookup
+                data[market] = {"metadata_start": markets_metadata[market], "all_clobs": [], "all_prices": [], "metadata_end": None}
         #print(len(data[market]["all_clobs"]))
         old_time_name = time_name
-        for market in markets:
-            market_metadata = data[market]["metadata"]
+
+        for market_binancelookup in markets:
+            market, market_binance = market_binancelookup
+            market_metadata = data[market]["metadata_start"]
+
             clobs = get_clob_data(market_metadata)
             #print(clobs)
             data[market]["all_clobs"].append(clobs)
+
+            # Fetch price data for each market
+            prices = get_price_data(market_binance)
+            data[market]["all_prices"].append(prices)
         ind += 1
         print(time_name)
         
