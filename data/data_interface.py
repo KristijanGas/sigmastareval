@@ -54,6 +54,8 @@ def parse_time_name_hourly():
     year = split2[0]
     month = map_months[int(split2[1])]
     day = split2[2]
+    if day[0] == "0":
+        day = day[1:]
 
 
     split3 = time.split("-")

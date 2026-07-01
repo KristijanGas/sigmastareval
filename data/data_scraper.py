@@ -6,6 +6,7 @@ import json
 from data_interface import parse_time_name_hourly
 from datetime import datetime
 from zoneinfo import ZoneInfo
+import gzip
 
 markets = ["bitcoin-up-or-down","ethereum-up-or-down","solana-up-or-down","xrp-up-or-down"]
 #markets = ["bitcoin-up-or-down"]
@@ -63,11 +64,15 @@ def store_data(data, time_name):
         market_data = data[market]
         metadata = market_data["metadata"]
         all_clobs = market_data["all_clobs"]
-        store_path = f"datasets/{market}/{market}-{time_name}.json"
+        store_path = f"datasets/{market}/{market}-{time_name}.gz"
         # create file
 
+#reading it badck
+#with gzip.open("data.json.gz", "rt", encoding="utf-8") as f:
+#    data = json.load(f)
+
         os.makedirs(os.path.dirname(store_path), exist_ok=True)
-        with open(store_path, "w") as f:
+        with gzip.open(store_path, "wt", encoding="utf-8") as f:
             json.dump({"metadata": metadata, "all_clobs": all_clobs}, f)
         print(f"Stored data for {market} at {store_path}")
 
@@ -88,6 +93,7 @@ def __main__():
             markets_metadata = get_current_market_names(time_name)
             for market in markets:
                 data[market] = {"metadata": markets_metadata[market], "all_clobs": []}
+        #print(len(data[market]["all_clobs"]))
         old_time_name = time_name
         for market in markets:
             market_metadata = data[market]["metadata"]
