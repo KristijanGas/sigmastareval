@@ -3,8 +3,9 @@
 
 
 class market_simulator:
-    def __init__(self):
+    def __init__(self, data_provider):
         self.orders = {}
+        self.data_provider = data_provider
 
     def place_order(self, order_type, token_id, order_action, order_size, price):
         self.orders[token_id] = {
