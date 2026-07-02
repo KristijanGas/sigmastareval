@@ -8,7 +8,7 @@ from bot.masterbot import masterbot
 
 
 
-class Evaluator:
+class replay_engine:
     def __init__(self, bot: masterbot):
         self.bot = bot
 
@@ -47,7 +47,7 @@ def load_bot(class_path: str) -> masterbot:
     if not issubclass(cls, masterbot):
         raise TypeError(f"{class_path} is not a subclass of MasterBot")
 
-    return cls()
+    return cls(False)
 
 
 def main():
@@ -61,7 +61,7 @@ def main():
     bot = load_bot(sys.argv[1])
     dataset_paths = sys.argv[2:]
 
-    evaluator = Evaluator(bot)
+    evaluator = replay_engine(bot)
     evaluator.run(dataset_paths)
 
 
