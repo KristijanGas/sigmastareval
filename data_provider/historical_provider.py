@@ -14,3 +14,12 @@ class historical_provider:
     
     def get_order_book(self):
         return self.order_book
+
+    def set_order_book(self, order_book):
+        self.order_book = order_book
+
+    def set_crypto_value(self, crypto_value):
+        self.crypto_value = crypto_value
+        
+    def set_timestamp(self, timestamp):
+        self.timestamp = timestamp
