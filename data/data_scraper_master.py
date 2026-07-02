@@ -25,7 +25,10 @@ for market in markets:
 
 try:
     while True:
-        time.sleep(1)
+
+        print("Updating metadata...")
+        subprocess.run([sys.executable, "data/data_meta_fill.py"], check=True)
+        time.sleep(600)
 except KeyboardInterrupt:
     print("Terminating all scraper processes...")
     for process in processes:
