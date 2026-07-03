@@ -1,9 +1,10 @@
 
 
 class historical_provider:
-    def __init__(self):
+    def __init__(self, market=None):
         self.order_book = None
         self.crypto_value = None
+        self.market = market
 
     def get_current_timestamp(self):
         return max(int(self.crypto_value["timestamp"]), int(self.order_book[0][1]["timestamp"]))
@@ -117,7 +118,7 @@ class historical_provider:
 
         remaining_money = investment
         shares = 0.0
-        tick_size = float(self.order_book[0][1]["tick_size"])
+        tick_size = float(self.get_asset(asset_id)["tick_size"])
         pointer = len(asks) - 1
 
         while remaining_money > 0 and pointer >= 0:
@@ -157,6 +158,20 @@ class historical_provider:
 
     def volume_weighted_sell_price(self, asset_id, amount):
         return self.sell_gain(asset_id, amount) / amount
+
+    def get_asset_orders(self, asset_id):
+        return self.market.get_asset_orders(asset_id)
+
+    def get_all_orders(self):
+        return self.market.get_all_orders()
+
+    def get_user_holdings(self):
+        return self.market.get_user_holdings()
+    
+    def get_user_cash(self):
+        if self.market is None:
+            raise ValueError("Market is not set.")
+        return self.market.get_user_cash()
 
     def set_order_book(self, order_book):
         self.order_book = order_book

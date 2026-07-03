@@ -10,5 +10,4 @@ class SampleBot(masterbot):
       if self.market is None or self.data_provider is None:
          raise ValueError("Market and data provider must be set before running the bot.")
       asset_ids = self.data_provider.get_market_asset_ids()
-      print(self.data_provider.get_mid_price(asset_ids[0]))
-   
+      print(self.data_provider.get_user_cash())

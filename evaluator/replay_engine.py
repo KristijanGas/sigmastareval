@@ -27,6 +27,7 @@ class replay_engine:
         """
         self.data_provider = historical_provider()
         self.market = market_simulator(self.data_provider, starting_cash)
+        self.data_provider.market = self.market
         self.bot.market = self.market
         self.bot.data_provider = self.data_provider
 
@@ -46,7 +47,7 @@ class replay_engine:
         #for i in range(order_library_size):
         self.data_provider.set_order_book(data["all_clobs"][0])
         self.data_provider.set_crypto_value(data["all_prices"][0])
-        print(self.data_provider.order_book)
+        #print(self.data_provider.order_book)
         self.bot.run()
 
 

@@ -7,9 +7,12 @@ class market_simulator:
         self.orders = {}
         self.data_provider = data_provider
         self.starting_cash = starting_cash
+
+        # user tracking
         self.current_cash = starting_cash
         self.user_orders = []
         self.order_id_counter = 0
+        self.user_holdings = {}
 
     def place_order(self, order_type, asset_id, order_action, order_size, price):
         self.order_id_counter += 1
@@ -34,15 +37,14 @@ class market_simulator:
         return False
 
 
-    def get_order(self, asset_id):
+    def get_asset_orders(self, asset_id):
         return self.orders.get(asset_id, None)
 
     def get_all_orders(self):
         return self.orders
-
-    def set_order_book(self, order_book):
-        self.data_provider.set_order_book(order_book)
-    def set_crypto_value(self, crypto_value):
-        self.data_provider.set_crypto_value(crypto_value)
-    def set_timestamp(self, timestamp):
-        self.data_provider.set_timestamp(timestamp)
+    
+    def get_user_holdings(self):
+        return self.user_holdings
+    
+    def get_user_cash(self):
+        return self.current_cash
