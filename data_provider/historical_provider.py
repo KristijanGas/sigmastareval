@@ -2,15 +2,14 @@
 
 class historical_provider:
     def __init__(self):
-        self.timestamp = 0
         self.order_book = None
         self.crypto_value = None
 
     def get_current_timestamp(self):
-        return self.timestamp
+        return max(int(self.crypto_value["timestamp"]), int(self.order_book[0][1]["timestamp"]))
     
     def get_crypto_value(self):
-        return self.crypto_value
+        return self.crypto_value["price"]
     
     def get_order_book(self):
         return self.order_book
@@ -118,7 +117,7 @@ class historical_provider:
 
         remaining_money = investment
         shares = 0.0
-
+        tick_size = float(self.order_book[0][1]["tick_size"])
         pointer = len(asks) - 1
 
         while remaining_money > 0 and pointer >= 0:
@@ -134,7 +133,8 @@ class historical_provider:
             remaining_money -= bought * price
 
             pointer -= 1
-
+        shares = int(shares / tick_size)
+        shares = shares * tick_size
         return shares
 
     def total_bid_liquidity(self, asset_id): # total_bid_liquidity returns the total bid liquidity of an asset, based on the current order book
@@ -165,6 +165,4 @@ class historical_provider:
         self.crypto_value = crypto_value
         # current data is stored in seconds with 6 decimal places, convert directly to int with miliseconds
         self.crypto_value["timestamp"] = int(self.crypto_value["timestamp"] * 1000)
-        
-    def set_timestamp(self, timestamp):
-        self.timestamp = timestamp
+    

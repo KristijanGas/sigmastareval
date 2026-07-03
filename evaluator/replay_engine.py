@@ -39,6 +39,15 @@ class replay_engine:
         order_library_size = len(data["all_clobs"])
         binance_lookups_size = len(data["all_prices"])
         print(f"Order library size: {order_library_size}, Binance lookups size: {binance_lookups_size}")
+        if order_library_size != binance_lookups_size:
+            print("Warning: Order library size and Binance lookups size do not match. This may indicate a problem with the dataset.")
+            return None
+        
+        #for i in range(order_library_size):
+        self.data_provider.set_order_book(data["all_clobs"][0])
+        self.data_provider.set_crypto_value(data["all_prices"][0])
+        print(self.data_provider.order_book)
+        self.bot.run()
 
 
     def evaluate_dataset(self, dataset_path: Path):

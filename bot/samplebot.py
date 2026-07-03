@@ -5,14 +5,10 @@ from .order_types import OrderType
 import time
 
 class SampleBot(masterbot):
+
    def run(self):
-      value = self.get_crypto_value(self)
-      print(value)
-      now = datetime.datetime.now().timestamp()
-      dt = datetime.datetime(1942, 11, 20, 0, 0)
-      token_id = 0 #ovo kasnije promijeniti, kao i druge argumente dolje u if
-
-      if ((now - dt)*int(value) % 513 < 67):
-         self.market.place_order(self, OrderType.GTC, token_id, OrderAction.ASK, order_size=10, price=1)
-
+      if self.market is None or self.data_provider is None:
+         raise ValueError("Market and data provider must be set before running the bot.")
+      asset_ids = self.data_provider.get_market_asset_ids()
+      print(self.data_provider.get_mid_price(asset_ids[0]))
    
