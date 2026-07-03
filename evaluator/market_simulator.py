@@ -8,23 +8,34 @@ class market_simulator:
         self.data_provider = data_provider
         self.starting_cash = starting_cash
         self.current_cash = starting_cash
+        self.user_orders = []
+        self.order_id_counter = 0
 
-    def place_order(self, order_type, token_id, order_action, order_size, price):
-        self.orders[token_id] = {
-            "type": order_type,
-            "action": order_action,
-            "size": order_size,
-            "remaining": order_size,
-            "price": price
-        }
-        
+    def place_order(self, order_type, asset_id, order_action, order_size, price):
+        self.order_id_counter += 1
+        self.orders.append(
+            {
+            "order_id": self.order_id_counter,
+            "asset_id": asset_id,
+            "order_type": order_type,
+            "order_action": order_action,
+            "order_size": order_size,
+            "price": price,
+            "timestamp": self.data_provider.get_current_timestamp()
+            }
+        )
+        return self.order_id_counter
 
-    def cancel_order(self, token_id):
-        if token_id in self.orders:
-            del self.orders[token_id]
+    def cancel_order(self, order_id):
+        for order in self.orders:
+            if order["order_id"] == order_id:
+                self.orders.remove(order)
+                return True
+        return False
 
-    def get_order(self, token_id):
-        return self.orders.get(token_id, None)
+
+    def get_order(self, asset_id):
+        return self.orders.get(asset_id, None)
 
     def get_all_orders(self):
         return self.orders
