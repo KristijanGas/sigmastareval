@@ -23,7 +23,7 @@ class replay_engine:
     def __init__(self, bot: masterbot):
         self.bot = bot
 
-    def initialize_environment(self, starting_cash, data):
+    def initialize_environment(self, starting_cash, data, filename):
         """
         Initializes the environment for the bot to run in.
         """
@@ -32,30 +32,41 @@ class replay_engine:
         self.data_provider.market = self.market
         self.bot.market = self.market
         self.bot.data_provider = self.data_provider
-        self.eventMetadata = data["metadata_end"][0]["eventMetadata"]
+        try:
+            self.eventMetadata = data["metadata_end"][0]["eventMetadata"]
+        except (TypeError, KeyError, IndexError):
+            print(f"Warning: No event metadata found in the dataset. This may indicate a problem with the dataset. File: {filename}")
+            self.eventMetadata = None
+            return False
+        
         self.data_provider.set_price_to_beat(data["metadata_end"][0]["eventMetadata"]["priceToBeat"])
+        return True
 
 
-    def evaluate_datapoint(self, data):
+    def evaluate_datapoint(self, data, filename):
         """
         Evaluates a single data point. (usually an hour in an hourly market or 5 mins in a 5 min market)
         """
-        self.initialize_environment(100, data)
+        correctly_initialized = self.initialize_environment(100, data, filename)
+        if not correctly_initialized:
+            return None
         order_library_size = len(data["all_clobs"])
         binance_lookups_size = len(data["all_prices"])
         #print(f"Order library size: {order_library_size}, Binance lookups size: {binance_lookups_size}")
         if order_library_size != binance_lookups_size:
-            print("Warning: Order library size and Binance lookups size do not match. This may indicate a problem with the dataset.")
+            print(f"Warning: Order library size and Binance lookups size do not match. This may indicate a problem with the dataset. File: {filename}")
             return None
         
         outcomes = json.loads(data["metadata_end"][0]["markets"][0]["outcomes"])
+        clobTokenIds = json.loads(data["metadata_end"][0]["markets"][0]["clobTokenIds"])
         if len(outcomes) != 2:
-            print("Warning: More than 2 outcomes in the market. This may indicate a problem with the dataset.")
+            print(f"Warning: More than 2 outcomes in the market. This may indicate a problem with the dataset. File: {filename}")
             return None
         
-        if self.eventMetadata is None:
-            print("Warning: No event metadata found in the dataset. This may indicate a problem with the dataset.")
+        if self.eventMetadata is None or self.eventMetadata.get("priceToBeat") is None or self.eventMetadata.get("finalPrice") is None:
+            print(f"Warning: Incomplete event metadata found in the dataset. This may indicate a problem with the dataset. File: {filename}")
             return None
+        
         '''
         self.data_provider.set_order_book(data["all_clobs"][0])
         self.data_provider.set_crypto_value(data["all_prices"][0])
@@ -66,13 +77,29 @@ class replay_engine:
         print(f"Orders after processing: {self.data_provider.get_all_orders()}")
         print(f"Order book after processing: {self.data_provider.get_asset(self.data_provider.get_market_asset_ids()[0])}")
         '''
+
         for i in range(order_library_size):
+            if data["all_clobs"][i] is None or data["all_prices"][i] is None:
+                print(f"Warning: Missing data at index {i}. Skipping this datapoint. File: {filename}")
+                continue
             self.data_provider.set_order_book(data["all_clobs"][i])
             self.data_provider.set_crypto_value(data["all_prices"][i])
+            order_book = self.data_provider.get_order_book()
+            skip = 0
+            for asset in order_book:
+                if asset[1] is None:
+                    skip = 1
+                    print(f"Warning: Missing asset data in order book at index {i}. Skipping this datapoint. File: {filename}")
+                    break
+            if skip:
+                continue
+            for j in range(len(data["all_clobs"][i])):
+                self.market.set_min_order_size(data["all_clobs"][i][j][0], data["all_clobs"][i][j][1]["min_order_size"])
+
             self.bot.run()
             self.market.process_orders()
 
-        self.market.resolve_market(self.eventMetadata,outcomes)
+        self.market.resolve_market(self.eventMetadata,outcomes, clobTokenIds)
         
         return self.market.get_user_cash()
 
@@ -84,11 +111,12 @@ class replay_engine:
         for gz_file in dataset_path.rglob("*.gz"):
             with gzip.open(gz_file, "rt", encoding="utf-8") as f:
                 data = json.load(f)
-            try:
-                final_cash = self.evaluate_datapoint(data)
-                outcomes.append(round(final_cash, 2))
-            except Exception as e:
-                print(f"Error occurred while evaluating datapoint in {gz_file}: {e}")
+            #try:
+                final_cash = self.evaluate_datapoint(data, gz_file)
+                if final_cash is not None:
+                    outcomes.append(round(final_cash, 2))
+            #except Exception as e:
+            #    print(f"Error occurred while evaluating datapoint in {gz_file}: {e}")
         outcomes.sort()
         print(f"Final cash outcomes for dataset {dataset_path}: {outcomes}")
         print(f"Average final cash outcome for dataset {dataset_path}: {sum(outcomes) / len(outcomes) if outcomes else 0}")

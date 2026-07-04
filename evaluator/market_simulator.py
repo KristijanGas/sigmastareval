@@ -8,12 +8,20 @@ class market_simulator:
         
         self.data_provider = data_provider
         self.starting_cash = starting_cash
-
+        self.min_order_size = {}
+        self.fee_percent = 0.07
+        self.new_order = {}
         # user tracking
         self.current_cash = starting_cash
         self.orders = []
         self.order_id_counter = 0
         self.user_holdings = {}
+
+    def set_min_order_size(self, asset_id, min_order_size):
+        self.min_order_size[asset_id] = min_order_size
+
+    def calculate_fee(self, price, shares):
+        return shares * price * (1 - price) * self.fee_percent
 
 
     def place_order(self, order_type, asset_id, order_action, order_size, price, timeout):
@@ -27,6 +35,8 @@ class market_simulator:
             raise ValueError(f"Price must be positive: {price}")
         if order_type == OrderType.GTD and timeout <= self.data_provider.get_current_timestamp():
             raise ValueError(f"GTD order timeout must be in the future: {timeout}")
+        #if order_size < float(self.min_order_size[asset_id]):
+        #    raise ValueError(f"Order size must be greater than or equal to the minimum order size: {self.set_min_order_size}")
         
         self.order_id_counter += 1
         self.orders.append(
@@ -41,6 +51,7 @@ class market_simulator:
             "timeout": timeout
             }
         )
+        self.new_order[self.order_id_counter] = True
         return self.order_id_counter
 
     def cancel_order(self, order_id):
@@ -123,8 +134,9 @@ class market_simulator:
 
             
             if order_type == OrderType.GTC or order_type == OrderType.GTD or order_type == OrderType.FAK:
-                if  order_type == OrderType.GTD and timeout > self.data_provider.get_current_timestamp(): # gtd expires while gtc does not
-                    self.orders.remove(order)
+                if  order_type == OrderType.GTD and self.data_provider.get_current_timestamp() > timeout: # gtd expires while gtc does not
+                    orderIDs_to_remove.append(order["order_id"])
+                    continue
 
                 if order_action == OrderAction.BID:
                     money_spent, successful_matches, update_asks = self.match_buy(asset_id, order_size, price, self.current_cash)
@@ -148,19 +160,22 @@ class market_simulator:
                     if successful_matches == order_size:
                         self.current_cash -= money_spent
                         self.user_holdings[asset_id] = self.user_holdings.get(asset_id, 0) + successful_matches
-                        self.orders.remove(order)
+                        orderIDs_to_remove.append(order["order_id"])
                         update_asks = potential_update_asks
                 elif order_action == OrderAction.ASK:
                     money_earned, successful_matches, potential_update_bids = self.match_sell(asset_id, min(order_size, self.user_holdings.get(asset_id, 0)), price)
                     if successful_matches == order_size:
                         self.current_cash += money_earned
                         self.user_holdings[asset_id] = self.user_holdings.get(asset_id, 0) - successful_matches
-                        self.orders.remove(order)
+                        orderIDs_to_remove.append(order["order_id"])
                         update_bids = potential_update_bids
                 else:
                     raise ValueError(f"Unknown order action: {order_action}")
                 #self.orders.remove(order) # fills entirely or dies instantly
-                orderIDs_to_remove.append(order["order_id"])  
+                orderIDs_to_remove.append(order["order_id"])
+            if self.new_order.get(order["order_id"], False):
+                self.current_cash -= self.calculate_fee(price, order_size)
+                
             if update_bids is not None:
                 self.data_provider.update_bids(asset_id, update_bids)
             if update_asks is not None:
@@ -168,7 +183,9 @@ class market_simulator:
         for order_id in orderIDs_to_remove:
             self.cancel_order(order_id)
 
-    def resolve_market(self,eventMetadata,outcomes):
+        self.new_order.clear()
+
+    def resolve_market(self,eventMetadata,outcomes, clobTokenIds):
         
         if eventMetadata["finalPrice"] >= eventMetadata["priceToBeat"]:
             winning_asset = "Up"
@@ -178,7 +195,7 @@ class market_simulator:
             if outcomes[i] == winning_asset:
                 winning_asset_id = i
                 break
-        winning_token_id = self.data_provider.get_market_asset_ids()[winning_asset_id]
+        winning_token_id = clobTokenIds[winning_asset_id]
         #print(f"Winning asset: {winning_asset}, Winning asset ID: {winning_token_id}, Final price: {eventMetadata['finalPrice']}")
         if self.user_holdings.get(winning_token_id, 0) > 0:
             self.current_cash += self.user_holdings[winning_token_id]
@@ -187,7 +204,11 @@ class market_simulator:
         
 
     def get_asset_orders(self, asset_id):
-        return self.orders.get(asset_id, None)
+        return [
+            order
+            for order in self.orders
+            if order["asset_id"] == asset_id
+        ]
 
     def get_all_orders(self):
         return self.orders
