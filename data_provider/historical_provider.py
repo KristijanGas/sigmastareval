@@ -12,6 +12,7 @@ class historical_provider:
     def get_current_timestamp(self):
         return max(int(self.crypto_value["timestamp"]), int(self.order_book[0][1]["timestamp"]))
     
+    
     def get_crypto_value(self):
         return self.crypto_value["price"]
     
@@ -165,8 +166,9 @@ class historical_provider:
     def volume_weighted_sell_price(self, asset_id, amount):
         return self.sell_gain(asset_id, amount) / amount
 
-    def get_asset_orders(self, asset_id):
-        return self.market.get_asset_orders(asset_id)
+    def get_asset_orders(self, asset_id, order_action):
+
+        return self.market.get_asset_orders(asset_id, order_action)
 
     def get_all_orders(self):
         return self.market.get_all_orders()

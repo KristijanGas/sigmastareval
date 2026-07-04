@@ -203,11 +203,11 @@ class market_simulator:
         
         
 
-    def get_asset_orders(self, asset_id):
+    def get_asset_orders(self, asset_id, order_action):
         return [
             order
             for order in self.orders
-            if order["asset_id"] == asset_id
+            if order["asset_id"] == asset_id and order["order_action"] == order_action
         ]
 
     def get_all_orders(self):
