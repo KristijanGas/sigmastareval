@@ -60,7 +60,7 @@ class ProfitBot(masterbot):
             long_slope = long_window[-1] - long_window[0]
             momentum_component = (0.7 * short_slope + 0.3 * long_slope) / max(volatility_scale * 2.0, 1.0)
 
-        return self._clamp(self._sigmoid((1.75 * price_component) + (1.10 * momentum_component)), 0.02, 0.98)
+        return self._clamp(self._sigmoid((1.15 * price_component) + (0.65 * momentum_component)), 0.08, 0.92)
 
     def _build_market_snapshot(self, asset_ids):
         snapshot = []
@@ -166,6 +166,42 @@ class ProfitBot(masterbot):
 
         current_price = self.price_history[-1]
         return (current_price - self.initial_price) / max(self.initial_price, 1.0)
+    
+    def _buy_asset(self, asset, fair_price, max_cash_fraction=0.04):
+        ask = asset["ask"]
+        edge = fair_price - ask
+
+        # Was 0.035 — require much stronger edge
+        if edge < 0.07:
+            return False
+
+        cash = self.data_provider.get_user_cash()
+        budget = cash * max_cash_fraction
+
+        if budget <= 0 or ask <= 0:
+            return False
+
+        available_size = self.data_provider.can_buy_with(asset["asset_id"], budget)
+
+        # Scale down position size
+        edge_scale = self._clamp(edge / 0.20, 0.10, 0.60)
+        target_size = (budget / ask) * edge_scale
+
+        size = min(available_size, target_size)
+        size = self._normalize_order_size(asset["asset_id"], size)
+
+        if size <= 0:
+            return False
+
+        self.market.place_order(
+            OrderType.FAK,
+            asset["asset_id"],
+            OrderAction.BID,
+            size,
+            ask,
+            None,
+        )
+        return True
 
     def run(self):
         self.tick += 1
@@ -176,12 +212,39 @@ class ProfitBot(masterbot):
 
         current_price = float(self.data_provider.get_crypto_value())
         price_to_beat = float(self.data_provider.get_price_to_beat() or current_price)
+
         if self.initial_price is None:
             self.initial_price = current_price
+
         self.price_history.append(current_price)
 
         market_data = self._build_market_snapshot(asset_ids[:2])
         if market_data is None:
             return
 
-        self._buy_both_if_underpriced(market_data)
+        # First take near-risk-free mispricing when both sides are cheap.
+        if self._buy_both_if_underpriced(market_data):
+            return
+
+        up_asset = market_data[0]
+        down_asset = market_data[1]
+
+        MAX_SPREAD = 0.08
+
+        if up_asset["ask"] - up_asset["bid"] > MAX_SPREAD:
+            return
+
+        if down_asset["ask"] - down_asset["bid"] > MAX_SPREAD:
+            return
+
+        up_probability = self._estimate_up_probability(current_price, price_to_beat)
+        down_probability = 1.0 - up_probability
+
+        up_edge = up_probability - up_asset["ask"]
+        down_edge = down_probability - down_asset["ask"]
+
+        # Only trade the better side.
+        if up_edge > down_edge:
+            self._buy_asset(up_asset, up_probability)
+        else:
+            self._buy_asset(down_asset, down_probability)

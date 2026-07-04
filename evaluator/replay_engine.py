@@ -42,6 +42,7 @@ class replay_engine:
             self.eventMetadata = None
             return False
         
+        self.data_provider.set_end_timestamp(data["metadata_end"][0]["endDate"])
         self.data_provider.set_price_to_beat(data["metadata_end"][0]["eventMetadata"]["priceToBeat"])
         return True
 
