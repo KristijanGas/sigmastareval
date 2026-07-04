@@ -33,7 +33,7 @@ class replay_engine:
         self.bot.market = self.market
         self.bot.data_provider = self.data_provider
         self.eventMetadata = data["metadata_end"][0]["eventMetadata"]
-        self.data_provider.set_price_to_beat(data["metadata_end"][0]["markets"][0]["priceToBeat"])
+        self.data_provider.set_price_to_beat(data["metadata_end"][0]["eventMetadata"]["priceToBeat"])
 
 
     def evaluate_datapoint(self, data):
@@ -43,7 +43,7 @@ class replay_engine:
         self.initialize_environment(100, data)
         order_library_size = len(data["all_clobs"])
         binance_lookups_size = len(data["all_prices"])
-        print(f"Order library size: {order_library_size}, Binance lookups size: {binance_lookups_size}")
+        #print(f"Order library size: {order_library_size}, Binance lookups size: {binance_lookups_size}")
         if order_library_size != binance_lookups_size:
             print("Warning: Order library size and Binance lookups size do not match. This may indicate a problem with the dataset.")
             return None
@@ -84,10 +84,14 @@ class replay_engine:
         for gz_file in dataset_path.rglob("*.gz"):
             with gzip.open(gz_file, "rt", encoding="utf-8") as f:
                 data = json.load(f)
-
-            final_cash = self.evaluate_datapoint(data)
-            outcomes.append(final_cash)
+            try:
+                final_cash = self.evaluate_datapoint(data)
+                outcomes.append(round(final_cash, 2))
+            except Exception as e:
+                print(f"Error occurred while evaluating datapoint in {gz_file}: {e}")
+        outcomes.sort()
         print(f"Final cash outcomes for dataset {dataset_path}: {outcomes}")
+        print(f"Average final cash outcome for dataset {dataset_path}: {sum(outcomes) / len(outcomes) if outcomes else 0}")
 
     def run(self, dataset_paths):
         for dataset_path in dataset_paths:

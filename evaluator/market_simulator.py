@@ -109,8 +109,8 @@ class market_simulator:
 
     def process_orders(self):
         orderIDs_to_remove = []
-        if len(self.orders) > 100:
-            print(f"Warning: More than 100 orders in the system, bot might be making mistakes. Current order count: {len(self.orders)}")
+        if len(self.orders) > 500:
+            print(f"Warning: More than 500 orders in the system, bot might be making mistakes. Current order count: {len(self.orders)}")
         for order in self.orders:
             asset_id = order["asset_id"]
             order_type = order["order_type"]
@@ -171,7 +171,7 @@ class market_simulator:
     def resolve_market(self,eventMetadata,outcomes):
         
         if eventMetadata["finalPrice"] >= eventMetadata["priceToBeat"]:
-            winnindg_asset = "Up"
+            winning_asset = "Up"
         else:
             winning_asset = "Down"
         for i in range(len(outcomes)):
@@ -179,7 +179,7 @@ class market_simulator:
                 winning_asset_id = i
                 break
         winning_token_id = self.data_provider.get_market_asset_ids()[winning_asset_id]
-        print(f"Winning asset: {winning_asset}, Winning asset ID: {winning_token_id}, Final price: {eventMetadata['finalPrice']}")
+        #print(f"Winning asset: {winning_asset}, Winning asset ID: {winning_token_id}, Final price: {eventMetadata['finalPrice']}")
         if self.user_holdings.get(winning_token_id, 0) > 0:
             self.current_cash += self.user_holdings[winning_token_id]
             self.user_holdings[winning_token_id] = 0
