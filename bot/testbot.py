@@ -11,11 +11,14 @@ class SampleBot(masterbot):
     def __init__(self, in_production = False, market = None, data_provider = None):
       super().__init__(in_production, market, data_provider)
       self.once = 0
+      self.tick = 0
+      self.once = 0
     def _estimated_fee(self, price, size):
         if self.market is None:
             return 0.0
         fee_rate = float(getattr(self.market, "fee_percent", 0.0))
         return size * price * (1 - price) * fee_rate
+    
     
     def run(self):
       asset_ids = self.data_provider.get_market_asset_ids()
@@ -24,11 +27,15 @@ class SampleBot(masterbot):
         best_ask = self.data_provider.get_best_ask(asset_id)
         mid_price = self.data_provider.get_mid_price(asset_id)
         spread = self.data_provider.get_spread(asset_id)
-        if best_bid is not None and best_bid < 0.2 and best_bid > 0.05:
-            #print(self.market.get_asset_orders(asset_id))
-            if self.market.get_asset_orders(asset_id, OrderAction.BID) == []:
-                self.market.place_order(OrderType.GTC, asset_id, OrderAction.BID, 100, best_bid, None)
-        if best_bid is not None and best_bid > 0.8 and best_bid < 0.95:
-            #print(self.market.get_asset_orders(asset_id))
-            if self.market.get_asset_orders(asset_id, OrderAction.ASK) == []:
-                self.market.place_order(OrderType.GTC, asset_id, OrderAction.ASK, 100, best_bid, None)
+        self.tick = self.tick + 1
+        if self.once < 2:
+            if mid_price is not None and mid_price < 0.35 and mid_price > 0.25:
+                #print(self.market.get_asset_orders(asset_id))
+                if self.market.get_asset_orders(asset_id, OrderAction.BID) == []:
+                    self.market.place_order(OrderType.GTC, asset_id, OrderAction.BID, 20, best_ask, None)
+
+                    self.once += 1
+            if mid_price is not None and mid_price > 0.5 and mid_price < 0.85:
+                #print(self.market.get_asset_orders(asset_id))
+                if self.market.get_asset_orders(asset_id, OrderAction.ASK) == []:
+                    self.market.place_order(OrderType.GTC, asset_id, OrderAction.ASK, 20, best_bid, None)
