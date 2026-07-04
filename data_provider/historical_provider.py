@@ -1,4 +1,5 @@
-
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 class historical_provider:
     def __init__(self, market=None):
@@ -6,6 +7,7 @@ class historical_provider:
         self.crypto_value = None
         self.market = market
         self.price_to_beat = None
+        self.end_timestamp = None
 
     def get_current_timestamp(self):
         return max(int(self.crypto_value["timestamp"]), int(self.order_book[0][1]["timestamp"]))
@@ -187,6 +189,15 @@ class historical_provider:
         self.crypto_value = crypto_value
         # current data is stored in seconds with 6 decimal places, convert directly to int with miliseconds
         self.crypto_value["timestamp"] = int(self.crypto_value["timestamp"] * 1000)
+
+    def set_end_timestamp(self, end_date):
+        dt = datetime.strptime(end_date, "%Y-%m-%dT%H:%M:%SZ")
+        dt = dt.replace(tzinfo=ZoneInfo("America/New_York"))
+        dt -= timedelta(hours=4)
+        timestamp_ms = int(dt.timestamp() * 1000)
+        print("end timestamp:")
+        print(timestamp_ms)
+        self.end_timestamp = timestamp_ms
     
     def update_bids(self, asset_id, updated_bids):
         asset = self.get_asset(asset_id)
