@@ -197,8 +197,6 @@ class historical_provider:
         dt = dt.replace(tzinfo=ZoneInfo("America/New_York"))
         dt -= timedelta(hours=4)
         timestamp_ms = int(dt.timestamp() * 1000)
-        print("end timestamp:")
-        print(timestamp_ms)
         self.end_timestamp = timestamp_ms
     
     def update_bids(self, asset_id, updated_bids):
