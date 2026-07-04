@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from importlib import import_module
 from importlib.util import module_from_spec, spec_from_file_location
+import json
+
 
 if __package__ is None or __package__ == "":
     repo_root = Path(__file__).resolve().parents[1]
@@ -21,21 +23,24 @@ class replay_engine:
     def __init__(self, bot: masterbot):
         self.bot = bot
 
-    def initialize_environment(self, starting_cash=100):
+    def initialize_environment(self, starting_cash, data):
         """
         Initializes the environment for the bot to run in.
         """
         self.data_provider = historical_provider()
         self.market = market_simulator(self.data_provider, starting_cash)
+        self.data_provider.market = self.market
         self.bot.market = self.market
         self.bot.data_provider = self.data_provider
+        self.eventMetadata = data["metadata_end"][0]["eventMetadata"]
+        self.data_provider.set_price_to_beat(data["metadata_end"][0]["markets"][0]["priceToBeat"])
 
 
     def evaluate_datapoint(self, data):
         """
         Evaluates a single data point. (usually an hour in an hourly market or 5 mins in a 5 min market)
         """
-        self.initialize_environment()
+        self.initialize_environment(100, data)
         order_library_size = len(data["all_clobs"])
         binance_lookups_size = len(data["all_prices"])
         print(f"Order library size: {order_library_size}, Binance lookups size: {binance_lookups_size}")
@@ -43,19 +48,46 @@ class replay_engine:
             print("Warning: Order library size and Binance lookups size do not match. This may indicate a problem with the dataset.")
             return None
         
-        #for i in range(order_library_size):
+        outcomes = json.loads(data["metadata_end"][0]["markets"][0]["outcomes"])
+        if len(outcomes) != 2:
+            print("Warning: More than 2 outcomes in the market. This may indicate a problem with the dataset.")
+            return None
+        
+        if self.eventMetadata is None:
+            print("Warning: No event metadata found in the dataset. This may indicate a problem with the dataset.")
+            return None
+        '''
         self.data_provider.set_order_book(data["all_clobs"][0])
         self.data_provider.set_crypto_value(data["all_prices"][0])
-        print(self.data_provider.order_book)
         self.bot.run()
+        self.market.process_orders()
+        print(f"User cash after processing: {self.data_provider.get_user_cash()}")
+        print(f"User holdings after processing: {self.data_provider.get_user_holdings()}")
+        print(f"Orders after processing: {self.data_provider.get_all_orders()}")
+        print(f"Order book after processing: {self.data_provider.get_asset(self.data_provider.get_market_asset_ids()[0])}")
+        '''
+        for i in range(order_library_size):
+            self.data_provider.set_order_book(data["all_clobs"][i])
+            self.data_provider.set_crypto_value(data["all_prices"][i])
+            self.bot.run()
+            self.market.process_orders()
+
+        self.market.resolve_market(self.eventMetadata,outcomes)
+        
+        return self.market.get_user_cash()
 
 
     def evaluate_dataset(self, dataset_path: Path):
+
+        outcomes = []
+
         for gz_file in dataset_path.rglob("*.gz"):
             with gzip.open(gz_file, "rt", encoding="utf-8") as f:
                 data = json.load(f)
 
-            self.evaluate_datapoint(data)
+            final_cash = self.evaluate_datapoint(data)
+            outcomes.append(final_cash)
+        print(f"Final cash outcomes for dataset {dataset_path}: {outcomes}")
 
     def run(self, dataset_paths):
         for dataset_path in dataset_paths:

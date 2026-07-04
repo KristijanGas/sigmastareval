@@ -1,15 +1,20 @@
 
 
 class historical_provider:
-    def __init__(self):
+    def __init__(self, market=None):
         self.order_book = None
         self.crypto_value = None
+        self.market = market
+        self.price_to_beat = None
 
     def get_current_timestamp(self):
         return max(int(self.crypto_value["timestamp"]), int(self.order_book[0][1]["timestamp"]))
     
     def get_crypto_value(self):
         return self.crypto_value["price"]
+    
+    def get_price_to_beat(self):
+        return self.price_to_beat
     
     def get_order_book(self):
         return self.order_book
@@ -117,7 +122,7 @@ class historical_provider:
 
         remaining_money = investment
         shares = 0.0
-        tick_size = float(self.order_book[0][1]["tick_size"])
+        tick_size = float(self.get_asset(asset_id)["tick_size"])
         pointer = len(asks) - 1
 
         while remaining_money > 0 and pointer >= 0:
@@ -158,11 +163,43 @@ class historical_provider:
     def volume_weighted_sell_price(self, asset_id, amount):
         return self.sell_gain(asset_id, amount) / amount
 
+    def get_asset_orders(self, asset_id):
+        return self.market.get_asset_orders(asset_id)
+
+    def get_all_orders(self):
+        return self.market.get_all_orders()
+
+    def get_user_holdings(self):
+        return self.market.get_user_holdings()
+    
+    def get_user_cash(self):
+        if self.market is None:
+            raise ValueError("Market is not set.")
+        return self.market.get_user_cash()
+
     def set_order_book(self, order_book):
         self.order_book = order_book
+    
+    def set_price_to_beat(self, price_to_beat):
+        self.price_to_beat = price_to_beat
 
     def set_crypto_value(self, crypto_value):
         self.crypto_value = crypto_value
         # current data is stored in seconds with 6 decimal places, convert directly to int with miliseconds
         self.crypto_value["timestamp"] = int(self.crypto_value["timestamp"] * 1000)
+    
+    def update_bids(self, asset_id, updated_bids):
+        asset = self.get_asset(asset_id)
+        for price, size in updated_bids.items():
+            for level in asset["bids"]:
+                if float(level["price"]) == price:
+                    level["size"] = size
+                    break
+    def update_asks(self, asset_id, updated_asks):
+        asset = self.get_asset(asset_id)
+        for price, size in updated_asks.items():
+            for level in asset["asks"]:
+                if float(level["price"]) == price:
+                    level["size"] = size
+                    break
     
