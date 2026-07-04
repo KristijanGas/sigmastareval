@@ -20,15 +20,15 @@ from data_provider.historical_provider import historical_provider
 
 
 class replay_engine:
-    def __init__(self, bot: masterbot, rest_bot_between_runs=True):
+    def __init__(self, bot: masterbot, reset_bot_between_runs=True):
         self.bot = bot
-        self.rest_bot_between_runs = rest_bot_between_runs
+        self.reset_bot_between_runs = reset_bot_between_runs
 
     def initialize_environment(self, starting_cash, data, filename):
         """
         Initializes the environment for the bot to run in.
         """
-        if self.rest_bot_between_runs:
+        if self.reset_bot_between_runs:
             self.bot = load_bot(sys.argv[1])
         self.data_provider = historical_provider()
         self.market = market_simulator(self.data_provider, starting_cash)
@@ -190,7 +190,7 @@ def main():
     bot = load_bot(sys.argv[1])
     dataset_paths = sys.argv[2:]
     print(f"Loaded bot: {bot.__class__.__name__}")
-    evaluator = replay_engine(bot, rest_bot_between_runs=False)
+    evaluator = replay_engine(bot, reset_bot_between_runs=False)
     evaluator.run(dataset_paths)
 
 
