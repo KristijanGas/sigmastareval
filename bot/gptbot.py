@@ -12,8 +12,11 @@ class ProfitBot(masterbot):
         super().__init__(in_production, market, data_provider)
         self.tick = 0
         self.price_history = deque(maxlen=48)
-        self.asset_roles = None
-        self.initial_price = None
+        self.short_window_size = 5
+        self.long_window_size = 20
+        self.stop_loss_percentage = 0.97  # 3% stop loss
+        self.take_profit_percentage = 1.03  # 3% take profit
+        self.asset_ids = None
 
     def _clamp(self, value, minimum, maximum):
         return max(minimum, min(maximum, value))
@@ -85,59 +88,44 @@ class ProfitBot(masterbot):
             return None
         return snapshot
 
-    def _buy_both_if_underpriced(self, market_data):
-        up_asset = market_data[0]
-        down_asset = market_data[1]
-        ask_sum = up_asset["ask"] + down_asset["ask"]
-        fee_buffer = self._estimated_fee(up_asset["ask"], up_asset["tick_size"]) + self._estimated_fee(down_asset["ask"], down_asset["tick_size"])
+    def _calculate_moving_average(self, window_size):
+        if len(self.price_history) < window_size:
+            return None
+        return sum(self.price_history[-window_size:]) / window_size
 
-        if ask_sum + fee_buffer >= 0.99:
-            return False
+    def _place_order(self, asset_id, order_action, price):
+        min_order_size, tick_size = self._get_asset_limits(asset_id)
+        budget = self.data_provider.get_user_cash() * 0.1  # Allocate 10% of cash for each trade
+        contract_count = self._normalize_order_size(asset_id, budget / price)
 
-        up_liquidity = self.data_provider.can_buy_with(up_asset["asset_id"], self.data_provider.get_user_cash())
-        if up_liquidity < up_asset["tick_size"]:
-            return False
-
-        down_liquidity = self.data_provider.can_buy_with(down_asset["asset_id"], self.data_provider.get_user_cash())
-        if down_liquidity < down_asset["tick_size"]:
-            return False
-
-        budget = self.data_provider.get_user_cash() * 0.35
-        if budget < ask_sum:
-            return False
-
-        contract_count = min(
-            up_asset["tick_size"] * math.floor(up_liquidity / up_asset["tick_size"]),
-            down_asset["tick_size"] * math.floor(down_liquidity / down_asset["tick_size"]),
-            math.floor(budget / ask_sum),
-        )
-
-        contract_count = self._normalize_order_size(up_asset["asset_id"], contract_count)
         if contract_count <= 0:
-            return False
-
-        projected_cost = (up_asset["ask"] + down_asset["ask"]) * contract_count
-        projected_fee = self._estimated_fee(up_asset["ask"], contract_count) + self._estimated_fee(down_asset["ask"], contract_count)
-        if projected_cost + projected_fee > self.data_provider.get_user_cash() * 0.35:
-            return False
+            return
 
         self.market.place_order(
-            OrderType.FAK,
-            up_asset["asset_id"],
-            OrderAction.BID,
+            OrderType.GTC,
+            asset_id,
+            order_action,
             contract_count,
-            up_asset["ask"],
-            None,
+            price,
+            timeout=None,
         )
-        self.market.place_order(
-            OrderType.FAK,
-            down_asset["asset_id"],
-            OrderAction.BID,
-            contract_count,
-            down_asset["ask"],
-            None,
-        )
-        return True
+
+    def _manage_existing_orders(self):
+        for order in self.market.get_all_orders():
+            current_price = self.data_provider.get_mid_price(order["asset_id"])
+            if order["order_action"] == OrderAction.BID:
+                stop_loss_price = order["price"] * self.stop_loss_percentage
+                take_profit_price = order["price"] * self.take_profit_percentage
+
+                if current_price <= stop_loss_price or current_price >= take_profit_price:
+                    self.market.cancel_order(order["order_id"])
+            elif order["order_action"] == OrderAction.ASK:
+                stop_loss_price = order["price"] * self.take_profit_percentage
+                take_profit_price = order["price"] * self.stop_loss_percentage
+
+                if current_price >= stop_loss_price or current_price <= take_profit_price:
+                    self.market.cancel_order(order["order_id"])
+
 
     def _get_roles(self, asset_ids):
         if self.asset_roles is None or len(self.asset_roles) != 2:
@@ -179,6 +167,18 @@ class ProfitBot(masterbot):
         if market_data is None:
             return
 
-        # First take near-risk-free mispricing when both sides are cheap.
-        if self._buy_both_if_underpriced(market_data):
-            return
+        current_price_up = market_data[0]["mid_price"]
+        current_price_down = market_data[1]["mid_price"]
+
+        self.price_history.append(current_price_up)
+
+        short_ma = self._calculate_moving_average(self.short_window_size)
+        long_ma = self._calculate_moving_average(self.long_window_size)
+
+        if short_ma is not None and long_ma is not None:
+            if short_ma > long_ma:  # Buy signal
+                self._place_order(asset_ids[0], OrderAction.BID, market_data[0]["ask"])
+            elif short_ma < long_ma:  # Sell signal
+                self._place_order(asset_ids[1], OrderAction.BID, market_data[1]["ask"])
+
+        self._manage_existing_orders()
