@@ -11,7 +11,7 @@ class ProfitBot(masterbot):
     def __init__(self, in_production=False, market=None, data_provider=None):
         super().__init__(in_production, market, data_provider)
         self.tick = 0
-        self.price_history = deque(maxlen=24)
+        self.price_history = deque(maxlen=48)
         self.asset_roles = None
         self.initial_price = None
 
@@ -49,18 +49,19 @@ class ProfitBot(masterbot):
         return z / (1.0 + z)
 
     def _estimate_up_probability(self, current_price, price_to_beat):
-        volatility_scale = max(25.0, price_to_beat * 0.00035)
-        price_component = (current_price - price_to_beat) / volatility_scale
+        price_to_beat = max(float(price_to_beat), 1.0)
+        relative_delta = (current_price - price_to_beat) / price_to_beat
+        price_component = relative_delta * 18.0
 
         momentum_component = 0.0
         if len(self.price_history) >= 6:
             short_window = list(self.price_history)[-6:]
             long_window = list(self.price_history)
-            short_slope = short_window[-1] - short_window[0]
-            long_slope = long_window[-1] - long_window[0]
-            momentum_component = (0.7 * short_slope + 0.3 * long_slope) / max(volatility_scale * 2.0, 1.0)
+            short_return = (short_window[-1] - short_window[0]) / max(short_window[0], 1.0)
+            long_return = (long_window[-1] - long_window[0]) / max(long_window[0], 1.0)
+            momentum_component = (8.0 * short_return) + (4.0 * long_return)
 
-        return self._clamp(self._sigmoid((1.15 * price_component) + (0.65 * momentum_component)), 0.08, 0.92)
+        return self._clamp(self._sigmoid(price_component + momentum_component), 0.20, 0.80)
 
     def _build_market_snapshot(self, asset_ids):
         snapshot = []
@@ -90,7 +91,7 @@ class ProfitBot(masterbot):
         ask_sum = up_asset["ask"] + down_asset["ask"]
         fee_buffer = self._estimated_fee(up_asset["ask"], up_asset["tick_size"]) + self._estimated_fee(down_asset["ask"], down_asset["tick_size"])
 
-        if ask_sum + fee_buffer >= 0.985:
+        if ask_sum + fee_buffer >= 0.99:
             return False
 
         up_liquidity = self.data_provider.can_buy_with(up_asset["asset_id"], self.data_provider.get_user_cash())
@@ -101,7 +102,7 @@ class ProfitBot(masterbot):
         if down_liquidity < down_asset["tick_size"]:
             return False
 
-        budget = self.data_provider.get_user_cash() * 0.20
+        budget = self.data_provider.get_user_cash() * 0.35
         if budget < ask_sum:
             return False
 
@@ -117,7 +118,7 @@ class ProfitBot(masterbot):
 
         projected_cost = (up_asset["ask"] + down_asset["ask"]) * contract_count
         projected_fee = self._estimated_fee(up_asset["ask"], contract_count) + self._estimated_fee(down_asset["ask"], contract_count)
-        if projected_cost + projected_fee > self.data_provider.get_user_cash() * 0.20:
+        if projected_cost + projected_fee > self.data_provider.get_user_cash() * 0.35:
             return False
 
         self.market.place_order(
@@ -167,56 +168,12 @@ class ProfitBot(masterbot):
         current_price = self.price_history[-1]
         return (current_price - self.initial_price) / max(self.initial_price, 1.0)
     
-    def _buy_asset(self, asset, fair_price, max_cash_fraction=0.04):
-        ask = asset["ask"]
-        edge = fair_price - ask
-
-        # Was 0.035 — require much stronger edge
-        if edge < 0.07:
-            return False
-
-        cash = self.data_provider.get_user_cash()
-        budget = cash * max_cash_fraction
-
-        if budget <= 0 or ask <= 0:
-            return False
-
-        available_size = self.data_provider.can_buy_with(asset["asset_id"], budget)
-
-        # Scale down position size
-        edge_scale = self._clamp(edge / 0.20, 0.10, 0.60)
-        target_size = (budget / ask) * edge_scale
-
-        size = min(available_size, target_size)
-        size = self._normalize_order_size(asset["asset_id"], size)
-
-        if size <= 0:
-            return False
-
-        self.market.place_order(
-            OrderType.FAK,
-            asset["asset_id"],
-            OrderAction.BID,
-            size,
-            ask,
-            None,
-        )
-        return True
-
     def run(self):
         self.tick += 1
 
         asset_ids = self.data_provider.get_market_asset_ids()
         if len(asset_ids) < 2:
             return
-
-        current_price = float(self.data_provider.get_crypto_value())
-        price_to_beat = float(self.data_provider.get_price_to_beat() or current_price)
-
-        if self.initial_price is None:
-            self.initial_price = current_price
-
-        self.price_history.append(current_price)
 
         market_data = self._build_market_snapshot(asset_ids[:2])
         if market_data is None:
@@ -225,26 +182,3 @@ class ProfitBot(masterbot):
         # First take near-risk-free mispricing when both sides are cheap.
         if self._buy_both_if_underpriced(market_data):
             return
-
-        up_asset = market_data[0]
-        down_asset = market_data[1]
-
-        MAX_SPREAD = 0.08
-
-        if up_asset["ask"] - up_asset["bid"] > MAX_SPREAD:
-            return
-
-        if down_asset["ask"] - down_asset["bid"] > MAX_SPREAD:
-            return
-
-        up_probability = self._estimate_up_probability(current_price, price_to_beat)
-        down_probability = 1.0 - up_probability
-
-        up_edge = up_probability - up_asset["ask"]
-        down_edge = down_probability - down_asset["ask"]
-
-        # Only trade the better side.
-        if up_edge > down_edge:
-            self._buy_asset(up_asset, up_probability)
-        else:
-            self._buy_asset(down_asset, down_probability)

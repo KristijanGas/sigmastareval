@@ -28,14 +28,11 @@ class SampleBot(masterbot):
         mid_price = self.data_provider.get_mid_price(asset_id)
         spread = self.data_provider.get_spread(asset_id)
         self.tick = self.tick + 1
-        if self.once < 2:
-            if mid_price is not None and mid_price < 0.35 and mid_price > 0.25:
+        if self.once < 1:
+            if mid_price is not None and mid_price < 0.5:
                 #print(self.market.get_asset_orders(asset_id))
                 if self.market.get_asset_orders(asset_id, OrderAction.BID) == []:
-                    self.market.place_order(OrderType.GTC, asset_id, OrderAction.BID, 20, best_ask, None)
+                    self.market.place_order(OrderType.GTC, asset_id, OrderAction.BID, 20, max(best_bid - 0.1, 0.01), None)
+                    self.market.place_order(OrderType.GTC, asset_id, OrderAction.ASK, 20, best_bid + 0.1, None)
 
-                    self.once += 1
-            if mid_price is not None and mid_price > 0.5 and mid_price < 0.85:
-                #print(self.market.get_asset_orders(asset_id))
-                if self.market.get_asset_orders(asset_id, OrderAction.ASK) == []:
-                    self.market.place_order(OrderType.GTC, asset_id, OrderAction.ASK, 20, best_bid, None)
+                    #self.once += 1

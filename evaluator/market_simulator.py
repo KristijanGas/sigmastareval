@@ -11,11 +11,14 @@ class market_simulator:
         self.min_order_size = {}
         self.fee_percent = 0.07
         self.new_order = {}
+        self.order_placements = []
         # user tracking
         self.current_cash = starting_cash
         self.orders = []
         self.order_id_counter = 0
         self.user_holdings = {}
+        # analytics
+        self.transactions = []
 
     def set_min_order_size(self, asset_id, min_order_size):
         self.min_order_size[asset_id] = min_order_size
@@ -49,6 +52,17 @@ class market_simulator:
             "price": price,
             "timestamp": self.data_provider.get_current_timestamp(),
             "timeout": timeout
+            }
+        )
+        self.order_placements.append(
+            {
+                "timestamp": self.data_provider.get_current_timestamp(),
+                "asset_id": asset_id,
+                "order_type": order_type,
+                "order_action": order_action,
+                "order_size": order_size,
+                "price": price,
+                "timeout": timeout,
             }
         )
         self.new_order[self.order_id_counter] = True
@@ -131,6 +145,7 @@ class market_simulator:
             timeout = order["timeout"]
             update_asks = None
             update_bids = None
+            cash_before_this_order = self.current_cash
 
             
             if order_type == OrderType.GTC or order_type == OrderType.GTD or order_type == OrderType.FAK:
@@ -175,6 +190,21 @@ class market_simulator:
                 orderIDs_to_remove.append(order["order_id"])
             if self.new_order.get(order["order_id"], False):
                 self.current_cash -= self.calculate_fee(price, order_size)
+            if successful_matches > 0:
+                self.transactions.append(
+                    {
+                        "timestamp": self.data_provider.get_current_timestamp(),
+                        "asset_id": asset_id,
+                        "order_action": order_action,
+                        "order_type": order_type,
+                        "successful_matches": successful_matches,
+                        "money_change": self.current_cash - cash_before_this_order,
+                        "fee": self.calculate_fee(price, order_size),
+                        "price": price,
+                        "money_after_order": self.current_cash,
+                        "user_holdings_after_order": self.user_holdings.get(asset_id, 0),
+                    }
+                )
                 
             if update_bids is not None:
                 self.data_provider.update_bids(asset_id, update_bids)
@@ -200,6 +230,7 @@ class market_simulator:
         if self.user_holdings.get(winning_token_id, 0) > 0:
             self.current_cash += self.user_holdings[winning_token_id]
             self.user_holdings[winning_token_id] = 0
+        return winning_asset
         
         
 

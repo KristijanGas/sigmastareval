@@ -2,6 +2,7 @@ import sys
 import gzip
 import json
 from pathlib import Path
+from enum import Enum
 from importlib import import_module
 from importlib.util import module_from_spec, spec_from_file_location
 import json
@@ -13,6 +14,14 @@ if __package__ is None or __package__ == "":
         sys.path.insert(0, str(repo_root))
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _json_default(value):
+    if isinstance(value, Enum):
+        return value.value
+    if isinstance(value, Path):
+        return str(value)
+    return str(value)
 
 from bot.masterbot import masterbot
 from market_simulator import market_simulator
@@ -66,6 +75,10 @@ class replay_engine:
         if len(outcomes) != 2:
             print(f"Warning: More than 2 outcomes in the market. This may indicate a problem with the dataset. File: {filename}")
             return None
+        asset_labels = {
+            clobTokenIds[index]: outcomes[index]
+            for index in range(min(len(outcomes), len(clobTokenIds)))
+        }
         
         if self.eventMetadata is None or self.eventMetadata.get("priceToBeat") is None or self.eventMetadata.get("finalPrice") is None:
             print(f"Warning: Incomplete event metadata found in the dataset. This may indicate a problem with the dataset. File: {filename}")
@@ -81,7 +94,13 @@ class replay_engine:
         print(f"Orders after processing: {self.data_provider.get_all_orders()}")
         print(f"Order book after processing: {self.data_provider.get_asset(self.data_provider.get_market_asset_ids()[0])}")
         '''
-
+        mid_prices = {}
+        crypto_prices = []
+        holdings_history = []
+        cash_history = []
+        timestamps = []
+        for asset_id in clobTokenIds:
+            mid_prices[asset_id] = []
         for i in range(order_library_size):
             if data["all_clobs"][i] is None or data["all_prices"][i] is None:
                 print(f"Warning: Missing data at index {i}. Skipping this datapoint. File: {filename}")
@@ -100,30 +119,73 @@ class replay_engine:
             for j in range(len(data["all_clobs"][i])):
                 self.market.set_min_order_size(data["all_clobs"][i][j][0], data["all_clobs"][i][j][1]["min_order_size"])
 
+            asset_ids = self.data_provider.get_market_asset_ids()
+            current_timestamp = self.data_provider.get_current_timestamp()
+            for asset_id in asset_ids:
+                mid_price = self.data_provider.get_mid_price(asset_id)
+                if mid_price is not None:
+                    mid_prices[asset_id].append({"mid_price": mid_price, "timestamp": current_timestamp})
+            crypto_prices.append(data["all_prices"][i])
             self.bot.run()
             self.market.process_orders()
+            current_timestamp = self.data_provider.get_current_timestamp()
+            holdings_history.append(
+                {
+                    "timestamp": current_timestamp,
+                    "holdings": {
+                        asset_id: self.market.get_user_holdings().get(asset_id, 0)
+                        for asset_id in asset_ids
+                    },
+                }
+            )
+            cash_history.append(
+                {
+                    "timestamp": current_timestamp,
+                    "cash": self.market.get_user_cash(),
+                }
+            )
+            timestamps.append(current_timestamp)
 
-        self.market.resolve_market(self.eventMetadata,outcomes, clobTokenIds)
-        
-        return self.market.get_user_cash()
+        resolution = self.market.resolve_market(self.eventMetadata,outcomes, clobTokenIds)
+        analytics = {
+            "transactions" : self.market.transactions,
+            "order_placements": self.market.order_placements,
+            "holdings_history": holdings_history,
+            "cash_history": cash_history,
+            "timestamps": timestamps,
+            "asset_labels": asset_labels,
+            "price_to_beat": self.eventMetadata.get("priceToBeat"),
+            "final_cash" : self.data_provider.get_user_cash(),
+            "resolution" : resolution,
+            "mid_prices" : mid_prices,
+            "crypto_prices" : crypto_prices,
+        }
+        return analytics
 
 
     def evaluate_dataset(self, dataset_path: Path):
 
         outcomes = []
+        output_dir = Path("tmp") / dataset_path.name
+        output_dir.mkdir(parents=True, exist_ok=True)
 
         for gz_file in dataset_path.rglob("*.gz"):
             with gzip.open(gz_file, "rt", encoding="utf-8") as f:
                 data = json.load(f)
             #try:
-                final_cash = self.evaluate_datapoint(data, gz_file)
-                if final_cash is not None:
-                    outcomes.append(round(final_cash, 2))
+                analytics = self.evaluate_datapoint(data, gz_file)
+                if analytics is not None:
+                    
+                    analytics_path = output_dir / f"{gz_file.stem}.analytics.json"
+                    #analytics_path.write_text(json.dumps(analytics, indent=2, default=_json_default), encoding="utf-8")
+                    print(f"Saved analytics to {analytics_path}")
+                    outcomes.append((round(analytics["final_cash"], 2), analytics_path))
             #except Exception as e:
             #    print(f"Error occurred while evaluating datapoint in {gz_file}: {e}")
         outcomes.sort()
-        print(f"Final cash outcomes for dataset {dataset_path}: {outcomes}")
-        print(f"Average final cash outcome for dataset {dataset_path}: {sum(outcomes) / len(outcomes) if outcomes else 0}")
+        for outcome, analytics_path in outcomes:
+            print(f"Final cash outcome: {outcome}, analytics saved at: {analytics_path}")
+        print(f"Average final cash outcome for dataset {dataset_path}: {sum(cash for cash, _ in outcomes) / len(outcomes) if outcomes else 0}")
 
     def run(self, dataset_paths):
         for dataset_path in dataset_paths:
