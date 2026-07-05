@@ -177,7 +177,7 @@ class replay_engine:
                 if analytics is not None:
                     
                     analytics_path = output_dir / f"{gz_file.stem}.analytics.json"
-                    #analytics_path.write_text(json.dumps(analytics, indent=2, default=_json_default), encoding="utf-8")
+                    analytics_path.write_text(json.dumps(analytics, indent=2, default=_json_default), encoding="utf-8")
                     print(f"Saved analytics to {analytics_path}")
                     outcomes.append((round(analytics["final_cash"], 2), analytics_path))
             #except Exception as e:

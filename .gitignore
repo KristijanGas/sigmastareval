@@ -5,6 +5,7 @@ __pycache__/
 
 temp.json
 /tmp
+analytics_graph.png
 # C extensions
 *.so
 
@@ -218,3 +219,4 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+.aider*
