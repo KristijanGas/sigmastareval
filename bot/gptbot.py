@@ -89,9 +89,13 @@ class ProfitBot(masterbot):
         return snapshot
 
     def _calculate_moving_average(self, window_size):
+        window_size = int(window_size)
         if len(self.price_history) < window_size:
             return None
-        return sum(self.price_history[-window_size:]) / window_size
+        
+        for i in range(len(self.price_history) - window_size + 1):
+            window = list(self.price_history)[i:i + window_size]
+        return sum(window) / window_size
 
     def _place_order(self, asset_id, order_action, price):
         min_order_size, tick_size = self._get_asset_limits(asset_id)
