@@ -10,12 +10,6 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
 
 
-def _short_label(asset_id: str, asset_labels: dict[str, str] | None = None) -> str:
-	if len(asset_id) <= 12:
-		return asset_id
-	return f"{asset_id[:6]}…{asset_id[-4:]}"
-
-
 def _coerce_number(value):
 	if isinstance(value, bool):
 		return value
@@ -101,6 +95,9 @@ def draw_graph(analytics: dict, output_path: str | Path | None = None, show: boo
 	order_placements = analytics.get("order_placements", []) or []
 	holdings_history = analytics.get("holdings_history", []) or []
 	price_to_beat = _coerce_number(analytics.get("price_to_beat"))
+	label_names = analytics.get("asset_labels", {}) or {}
+	#print(len(mid_prices["82783088000004723881141340236382359053519324814032043514559462982683641812561"]), "assets with mid prices")
+	#print(len(crypto_prices), "crypto price points")
 
 	fig, (ax_prices, ax_crypto, ax_holdings) = plt.subplots(
 		3,
@@ -125,7 +122,7 @@ def draw_graph(analytics: dict, output_path: str | Path | None = None, show: boo
 			values,
 			color=color,
 			linewidth=1.8,
-			label=f"{_short_label(asset_id)} mid",
+			label=f"{label_names.get(asset_id, f"{asset_id[:6]}…{asset_id[-4:]}")} mid",
 		)
 		price_handles.append(line)
 
@@ -192,19 +189,20 @@ def draw_graph(analytics: dict, output_path: str | Path | None = None, show: boo
 	ax_prices.grid(True, alpha=0.18)
 
 	crypto_timestamps, crypto_values = _series_from_points(crypto_prices, value_key="price")
+	relative_crypto_values = [value - price_to_beat for value in crypto_values]
 	if crypto_timestamps and crypto_values:
 		ax_crypto.plot(
 			crypto_timestamps,
-			crypto_values,
+			relative_crypto_values,
 			color="#2ca02c",
 			linewidth=1.8,
 			label="crypto price",
 		)
-		ax_crypto.fill_between(crypto_timestamps, crypto_values, color="#2ca02c", alpha=0.1)
-		_set_dynamic_ylim(ax_crypto, crypto_values)
+		ax_crypto.fill_between(crypto_timestamps, relative_crypto_values, color="#2ca02c", alpha=0.1)
+		_set_dynamic_ylim(ax_crypto, relative_crypto_values)
 	if isinstance(price_to_beat, (int, float)):
 		ax_crypto.axhline(
-			price_to_beat,
+			0,
 			color="#8c564b",
 			linestyle="--",
 			linewidth=1.6,
@@ -234,7 +232,7 @@ def draw_graph(analytics: dict, output_path: str | Path | None = None, show: boo
 			values,
 			linewidth=1.8,
 			color=price_colors[index % len(price_colors)],
-			label=_short_label(asset_id),
+			label=label_names.get(asset_id, f"{asset_id[:6]}…{asset_id[-4:]}")
 		)
 
 	if analytics.get("cash_history"):

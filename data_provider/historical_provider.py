@@ -37,14 +37,14 @@ class historical_provider:
     def get_best_bid(self, asset_id):
         bids = self.get_asset(asset_id)["bids"]
         if not bids:
-            return None
+            return 0
         return float(bids[-1]["price"])
 
 
     def get_best_ask(self, asset_id):
         asks = self.get_asset(asset_id)["asks"]
         if not asks:
-            return None
+            return 1
         return float(asks[-1]["price"])
 
 
@@ -60,9 +60,6 @@ class historical_provider:
     def get_mid_price(self, asset_id): # get_mid_price returns the mid price of an asset, based on the current order book
         bid = self.get_best_bid(asset_id)
         ask = self.get_best_ask(asset_id)
-
-        if bid is None or ask is None:
-            return None
 
         return (bid + ask) / 2
 

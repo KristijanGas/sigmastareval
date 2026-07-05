@@ -125,6 +125,8 @@ class replay_engine:
                 mid_price = self.data_provider.get_mid_price(asset_id)
                 if mid_price is not None:
                     mid_prices[asset_id].append({"mid_price": mid_price, "timestamp": current_timestamp})
+                else:
+                    print(f"Warning: Mid price is None for asset {asset_id} at index {i}. File: {filename}")
             crypto_prices.append(data["all_prices"][i])
             self.bot.run()
             self.market.process_orders()
