@@ -89,13 +89,9 @@ class ProfitBot(masterbot):
         return snapshot
 
     def _calculate_moving_average(self, window_size):
-        window_size = int(window_size)
         if len(self.price_history) < window_size:
             return None
-        
-        for i in range(len(self.price_history) - window_size + 1):
-            window = list(self.price_history)[i:i + window_size]
-        return sum(window) / window_size
+        return sum(self.price_history[-window_size:]) / window_size
 
     def _place_order(self, asset_id, order_action, price):
         min_order_size, tick_size = self._get_asset_limits(asset_id)
@@ -169,6 +165,7 @@ class ProfitBot(masterbot):
 
         market_data = self._build_market_snapshot(asset_ids[:2])
         if market_data is None:
+            print("Market data snapshot is None, skipping this tick.")
             return
 
         current_price_up = market_data[0]["mid_price"]
@@ -181,8 +178,10 @@ class ProfitBot(masterbot):
 
         if short_ma is not None and long_ma is not None:
             if short_ma > long_ma:  # Buy signal
+                print(f"Buy signal detected. Placing order for asset {asset_ids[0]} at price {market_data[0]['ask']}")
                 self._place_order(asset_ids[0], OrderAction.BID, market_data[0]["ask"])
             elif short_ma < long_ma:  # Sell signal
+                print(f"Sell signal detected. Placing order for asset {asset_ids[1]} at price {market_data[1]['ask']}")
                 self._place_order(asset_ids[1], OrderAction.BID, market_data[1]["ask"])
 
         self._manage_existing_orders()
