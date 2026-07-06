@@ -16,7 +16,7 @@ class PerformanceAnalyzer:
         with open(self.analytics_path, "r", encoding="utf-8") as f:
             self.data = json.load(f)
         self.generate_equity_curve()
-        print(self.max_drawdown())
+        #print(self.max_drawdown())
         #print(self.data.get("order_placements", []) or [])
         #print("ROI:")
         #print(self.roi())
