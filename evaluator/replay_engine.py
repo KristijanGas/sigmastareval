@@ -23,6 +23,8 @@ def _json_default(value):
         return str(value)
     return str(value)
 
+from analytics.aggregate_analyzer import AggregateAnalyzer
+from analytics.performance_analyzer import PerformanceAnalyzer
 from bot.masterbot import masterbot
 from market_simulator import market_simulator
 from data_provider.historical_provider import historical_provider
@@ -32,6 +34,8 @@ class replay_engine:
     def __init__(self, bot: masterbot, reset_bot_between_runs=True):
         self.bot = bot
         self.reset_bot_between_runs = reset_bot_between_runs
+        self.aggregate_analyzer = AggregateAnalyzer() # for whole dataset
+        self.performance_analyzer = None # different for each datapoint/iteration
 
     def initialize_environment(self, starting_cash, data, filename):
         """
@@ -66,6 +70,7 @@ class replay_engine:
         
         self.data_provider.set_end_timestamp(data["metadata_end"][0]["endDate"])
         self.data_provider.set_price_to_beat(data["metadata_end"][0]["eventMetadata"]["priceToBeat"])
+        self.performance_analyzer = PerformanceAnalyzer(starting_cash)
         return True
 
 
@@ -197,6 +202,9 @@ class replay_engine:
                     analytics_path.write_text(json.dumps(analytics, indent=2, default=_json_default), encoding="utf-8")
                     print(f"Saved analytics to {analytics_path}")
                     outcomes.append((round(analytics["final_cash"], 2), analytics_path))
+                    self.performance_analyzer.analytics_path = analytics_path
+                    analysis_result = self.performance_analyzer.analyze()
+                    self.aggregate_analyzer.add_result(analysis_result)
             #except Exception as e:
             #    print(f"Error occurred while evaluating datapoint in {gz_file}: {e}")
         outcomes.sort()
