@@ -26,3 +26,10 @@ class masterbot(ABC):
         It will be called when the bot is started.
         """
         pass
+    
+    def first_run_setup(self):
+        """
+        This method should be implemented by the user.
+        It will be called when the bot is started for the first time.
+        """
+        pass

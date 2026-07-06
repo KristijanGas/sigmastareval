@@ -39,8 +39,21 @@ class replay_engine:
         """
         if self.reset_bot_between_runs:
             self.bot = load_bot(sys.argv[1])
-        self.data_provider = historical_provider()
-        self.market = market_simulator(self.data_provider, starting_cash)
+        self.data_provider = historical_provider(data["metadata_start"])
+        base_name = None
+        filename_string = str(str(filename).split("/")[-1])
+        if filename_string[:18] == "bitcoin-up-or-down":
+            base_name = "bitcoin-up-or-down"
+        elif filename_string[:19] == "ethereum-up-or-down":
+            base_name = "ethereum-up-or-down"
+        elif filename_string[:17] == "solana-up-or-down":
+            base_name = "solana-up-or-down"
+        elif filename_string[:14] == "xrp-up-or-down":
+            base_name = "xrp-up-or-down"
+        else:
+            print(f"Warning: Unrecognized market type in filename {filename}. This may indicate a problem with the dataset.")
+            return False
+        self.market = market_simulator(self.data_provider, starting_cash, base_name)
         self.data_provider.market = self.market
         self.bot.market = self.market
         self.bot.data_provider = self.data_provider
@@ -128,6 +141,8 @@ class replay_engine:
                 else:
                     print(f"Warning: Mid price is None for asset {asset_id} at index {i}. File: {filename}")
             crypto_prices.append(data["all_prices"][i])
+            if i == 0:
+                self.bot.first_run_setup()
             self.bot.run()
             self.market.process_orders()
             current_timestamp = self.data_provider.get_current_timestamp()

@@ -4,10 +4,13 @@ from bot.order_types import OrderType
 
 
 class market_simulator:
-    def __init__(self, data_provider, starting_cash):
+    def __init__(self, data_provider, starting_cash, base_name):
         
         self.data_provider = data_provider
         self.starting_cash = starting_cash
+        self.base_name = base_name
+        #self.slug = slug
+        #self.market_name = market_name
         self.min_order_size = {}
         self.fee_percent = 0.07
         self.new_order = {}
@@ -189,8 +192,9 @@ class market_simulator:
                 #self.orders.remove(order) # fills entirely or dies instantly
                 orderIDs_to_remove.append(order["order_id"])
             if self.new_order.get(order["order_id"], False):
-                self.current_cash -= self.calculate_fee(price, order_size)
+                self.current_cash -= self.calculate_fee(price, successful_matches)
             if successful_matches > 0:
+                #print(f"Order {order['order_id']} matched {successful_matches} shares of asset {asset_id} at price {price}. Current cash: {self.current_cash:.2f}, User holdings: {self.user_holdings.get(asset_id, 0)}")
                 self.transactions.append(
                     {
                         "timestamp": self.data_provider.get_current_timestamp(),

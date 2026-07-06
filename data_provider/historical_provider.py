@@ -1,20 +1,41 @@
 from datetime import datetime, timedelta
+import json
 from zoneinfo import ZoneInfo
 
 class historical_provider:
-    def __init__(self, market=None):
+    def __init__(self, metadata):
         self.order_book = None
         self.crypto_value = None
-        self.market = market
         self.price_to_beat = None
         self.end_timestamp = None
+        self.metadata = metadata
+        self.up_token_id = None
+        self.down_token_id = None
+        outcome_name_list = json.loads(self.metadata[0]["markets"][0]["outcomes"])
+        self.token_ids = json.loads(self.metadata[0]["markets"][0]["clobTokenIds"])
+        for i in range(len(outcome_name_list)):
+            if outcome_name_list[i] == "Up":
+                self.up_token_id = self.token_ids[i]
+            elif outcome_name_list[i] == "Down":
+                self.down_token_id = self.token_ids[i]
+
+    def get_metadata(self):
+        return self.metadata
+    
+    def get_up_token_id(self):
+        return self.up_token_id
+
+    def get_down_token_id(self):
+        return self.down_token_id
 
     def get_current_timestamp(self):
         return max(int(self.crypto_value["timestamp"]), int(self.order_book[0][1]["timestamp"]))
     
+    def get_end_timestamp(self):
+        return self.end_timestamp
     
     def get_crypto_value(self):
-        return self.crypto_value["price"]
+        return float(self.crypto_value["price"])
     
     def get_price_to_beat(self):
         return self.price_to_beat
@@ -23,10 +44,9 @@ class historical_provider:
         return self.order_book
 
     def get_market_asset_ids(self):
-        asset_ids = []
-        for asset in self.order_book:
-            asset_ids.append(asset[1]["asset_id"])
-        return asset_ids
+        return self.token_ids
+    
+    #def get_up_token_id(self):
     
     def get_asset(self, asset_id):
         for _, asset in self.order_book:
