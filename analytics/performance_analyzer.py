@@ -1,6 +1,8 @@
 import json
 from analytics.equity_point import EquityPoint
 from analytics.performance_result import PerformanceResult
+import matplotlib.pyplot as plt
+from datetime import datetime
 
 # performance analyzer for one market run
 class PerformanceAnalyzer:
@@ -16,6 +18,8 @@ class PerformanceAnalyzer:
         with open(self.analytics_path, "r", encoding="utf-8") as f:
             self.data = json.load(f)
         self.generate_equity_curve()
+        #self.plot_equity_breakdown()
+        #self.plot_equity_curve()
         #print(self.max_drawdown())
         #print(self.data.get("order_placements", []) or [])
         #print("ROI:")
@@ -146,5 +150,49 @@ class PerformanceAnalyzer:
     def time_before_expiration(self):
         return None
     
+    def plot_equity_curve(self):
+        # Convert millisecond timestamps to datetime
+        times = [
+            datetime.fromtimestamp(point.timestamp / 1000)
+            for point in self.equity_curve
+        ]
+
+        equities = [
+            point.equity
+            for point in self.equity_curve
+        ]
+
+        plt.figure(figsize=(12, 6))
+        plt.plot(times, equities)
+
+        plt.title("Equity Curve")
+        plt.xlabel("Time")
+        plt.ylabel("Equity")
+        plt.grid(True)
+        plt.tight_layout()
+        plt.show()
+
+    def plot_equity_breakdown(self):
+        times = [
+            datetime.fromtimestamp(point.timestamp / 1000)
+            for point in self.equity_curve
+        ]
+
+        equities = [point.equity for point in self.equity_curve]
+        cash = [point.cash for point in self.equity_curve]
+        position_values = [point.position_value for point in self.equity_curve]
+
+        plt.figure(figsize=(12, 6))
+        plt.plot(times, equities, label="Equity")
+        plt.plot(times, cash, label="Cash")
+        plt.plot(times, position_values, label="Position Value")
+
+        plt.title("Equity Curve Breakdown")
+        plt.xlabel("Time")
+        plt.ylabel("Value")
+        plt.legend()
+        plt.grid(True)
+        plt.tight_layout()
+        plt.show()
 
     

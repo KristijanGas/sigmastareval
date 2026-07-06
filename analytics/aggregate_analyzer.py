@@ -12,22 +12,22 @@ class AggregateAnalyzer:
 
 
     def average_roi(self):
-        return None
+        return mean(r.roi for r in self.results)
     
     def median_roi(self):
-        return None
+        return median(r.roi for r in self.results)
     
     def stdev_roi(self):
-        return None
+        return stdev(r.roi for r in self.results)
     
     def average_pnl(self):
-        return None
+        return mean(r.pnl for r in self.results)
     
     def average_max_drawdown(self):
-        return None
+        return mean(r.max_drawdown for r in self.results)
     
     def worst_drawdown(self):
-        return None
+        return max(r.max_drawdown for r in self.results)
     
     # ratio
     def profitable_markets(self):
