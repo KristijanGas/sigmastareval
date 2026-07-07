@@ -33,9 +33,12 @@ class AggregateAnalyzer:
     def profitable_markets(self):
         return None
     
-    def profit_factor(self):
+    def average_profit_factor(self):
         return None
         
+    def average_trades_count(self):
+        return None    
+
     def sharpe_ratio(self):
         return None
         

@@ -3,6 +3,7 @@ from analytics.equity_point import EquityPoint
 from analytics.performance_result import PerformanceResult
 import matplotlib.pyplot as plt
 from datetime import datetime
+from bot.order_actions import OrderAction
 
 # performance analyzer for one market run
 class PerformanceAnalyzer:
@@ -100,9 +101,11 @@ class PerformanceAnalyzer:
     def pnl(self):
         return  self.data["final_cash"] - self.initial_balance
     
+    # biggest winning trade (detects lucky spikes)
     def largest_gain(self):
         return None
     
+    # biggest losing trade
     def largest_loss(self):
         return None
     
@@ -119,7 +122,17 @@ class PerformanceAnalyzer:
     
     # percentage of simulation with no open positions
     def idle_time(self):
-        return None
+        holdings_history = self.data["holdings_history"]
+        idle_time = 0
+        for i in range(len(holdings_history) - 1):
+            duration = holdings_history[i+1]["timestamp"] - holdings_history[i]["timestamp"]
+
+            if all(shares == 0 for shares in holdings_history[i]["holdings"].values()):
+                idle_time += duration
+        
+        total_time = self.data["timestamps"][-1] - self.data["timestamps"][0]
+        idle_fraction = idle_time / total_time
+        return idle_fraction
     
     # how close was the entry price to the best available price later?
     def entry_timing(self):
@@ -148,7 +161,47 @@ class PerformanceAnalyzer:
     
     # average minutes remaining when entering
     def time_before_expiration(self):
+        ts_end = self.data["timestamps"][-1]
+        sum = 0
+        count = 0
+        for t in self.data["transactions"]:
+            if t["order_action"] == OrderAction.BID:
+                sum += ts_end - t["timestamp"]
+                count += 1
+        if count > 0:
+            return sum / count / 1000 / 60
+        else:
+            return 0
+    
+    def trade_count(self):
         return None
+    
+    def profit_factor(self):
+        return None
+    
+    def total_fees_paid(self):
+        return sum(t["fee"] for t in self.data["transactions"])
+    
+    # makes bots with different balances comparable
+    def fees_to_initial_balance_ratio(self):
+        return sum(t["fee"] for t in self.data["transactions"]) / self.initial_balance
+    
+    # ratio: total_fees_paid / gross_pnl (total profit without fees)
+    def profit_lost_to_fees(self):
+        total_fees = self.total_fees_paid()
+        gross_pnl = self.pnl() + total_fees
+        return total_fees / gross_pnl
+
+    # how much money did the bot earn for every dollar spent on fees
+    def fee_efficiency(self):
+        return self.pnl() / self.total_fees_paid()
+    
+    # overtrading metric (how aggressively the bot trades relative to its capital)
+    def turnover(self):
+        total_traded_volume = sum(
+            t["price"] * t["successful_matches"] 
+            for t in self.data["transactions"])
+        return total_traded_volume / self.initial_balance
     
     def plot_equity_curve(self):
         # Convert millisecond timestamps to datetime
