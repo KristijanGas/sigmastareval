@@ -279,7 +279,7 @@ def main():
     print(f"Loaded bot: {bot.__class__.__name__}")
     evaluator = replay_engine(bot, reset_bot_between_runs=False)
     evaluator.run(dataset_paths)
-
+    evaluator.aggregate_analyzer.analyze()
 
 if __name__ == "__main__":
     main()

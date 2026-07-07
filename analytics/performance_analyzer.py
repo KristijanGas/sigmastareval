@@ -19,6 +19,9 @@ class PerformanceAnalyzer:
         with open(self.analytics_path, "r", encoding="utf-8") as f:
             self.data = json.load(f)
         self.generate_equity_curve()
+        self.performance_result.pnl = self.pnl()
+        self.performance_result.roi = self.roi()
+        self.performance_result.max_drawdown = self.max_drawdown()
         #self.plot_equity_breakdown()
         #self.plot_equity_curve()
         #print(self.max_drawdown())
