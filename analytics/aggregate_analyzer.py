@@ -129,6 +129,9 @@ class AggregateAnalyzer:
 
     def clean(self, values):
         return [v for v in values if v is not None and math.isfinite(v)]
+    
+    def clean_none(self, values):
+        return [v for v in values if v is not None]
 
     def average_profit_factor(self):
         valid_profit_factors = self.clean([r.profit_factor for r in self.results])
@@ -151,7 +154,9 @@ class AggregateAnalyzer:
         return min(valid_profit_factors)
     
     def max_profit_factor(self):
-        return max(r.profit_factor for r in self.results)
+        values = [r.profit_factor for r in self.results]
+        clean_values = self.clean_none(values)
+        return max(clean_values)
     
     # ratio
     def profitable_markets(self):
