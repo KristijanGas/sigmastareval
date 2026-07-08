@@ -1,3 +1,4 @@
+import os
 import sys
 import gzip
 import json
@@ -6,7 +7,7 @@ from enum import Enum
 from importlib import import_module
 from importlib.util import module_from_spec, spec_from_file_location
 import json
-
+import threading
 
 if __package__ is None or __package__ == "":
     repo_root = Path(__file__).resolve().parents[1]
@@ -183,39 +184,34 @@ class replay_engine:
             "crypto_prices" : crypto_prices,
         }
         return analytics
+    @staticmethod
+    def get_analysis_path(gz_path):
+        gz_path = Path(gz_path)
+
+        return (
+            Path("tmp")
+            / gz_path.parent.name
+            / f"{gz_path.stem}.analysis.json"
+        )
+
+    def evaluate_dataset(self, dataset_path: list[Path]):
 
 
-    def evaluate_dataset(self, dataset_path: Path):
-
-        outcomes = []
-        output_dir = Path("tmp") / dataset_path.name
-        output_dir.mkdir(parents=True, exist_ok=True)
-
-        for gz_file in dataset_path.rglob("*.gz"):
+        for gz_file in dataset_path:
             with gzip.open(gz_file, "rt", encoding="utf-8") as f:
                 data = json.load(f)
-            #try:
                 analytics = self.evaluate_datapoint(data, gz_file)
                 if analytics is not None:
-                    
-                    analytics_path = output_dir / f"{gz_file.stem}.analytics.json"
+
+                    analytics_path = self.get_analysis_path(gz_file)
+                    analytics_path.parent.mkdir(parents=True, exist_ok=True)
                     analytics_path.write_text(json.dumps(analytics, indent=2, default=_json_default), encoding="utf-8")
                     print(f"Saved analytics to {analytics_path}")
-                    outcomes.append((round(analytics["final_cash"], 2), analytics_path))
-                    self.performance_analyzer.analytics_path = analytics_path
-                    analysis_result = self.performance_analyzer.analyze()
-                    self.aggregate_analyzer.add_result(analysis_result)
-            #except Exception as e:
-            #    print(f"Error occurred while evaluating datapoint in {gz_file}: {e}")
-        outcomes.sort()
-        for outcome, analytics_path in outcomes:
-            print(f"Final cash outcome: {outcome}, analytics saved at: {analytics_path}")
-        print(f"Average final cash outcome for dataset {dataset_path}: {sum(cash for cash, _ in outcomes) / len(outcomes) if outcomes else 0}")
+                    #outcomes.append((round(analytics["final_cash"], 2), analytics_path))
 
-    def run(self, dataset_paths):
-        for dataset_path in dataset_paths:
-            print(f"Evaluating {dataset_path}")
-            self.evaluate_dataset(Path(dataset_path))
+        #for outcome, analytics_path in outcomes:
+        #    print(f"Final cash outcome: {outcome}, analytics saved at: {analytics_path}")
+        #print(f"Average final cash outcome for dataset {dataset_path}: {sum(cash for cash, _ in outcomes) / len(outcomes) if outcomes else 0}")
 
 
 def load_bot(class_path: str) -> masterbot:
@@ -270,15 +266,15 @@ def main():
     if len(sys.argv) < 3:
         print(
             "Usage:\n"
-            "python evaluator.py bots.my_bot.MyBot datasets/set1 datasets/set2 ..."
+            "python evaluator.py bots.my_bot.MyBot datafile1 datafile 2 ..."
         )
         sys.exit(1)
 
     bot = load_bot(sys.argv[1])
-    dataset_paths = sys.argv[2:]
+    datafile_paths = sys.argv[2:]
     print(f"Loaded bot: {bot.__class__.__name__}")
     evaluator = replay_engine(bot, reset_bot_between_runs=False)
-    evaluator.run(dataset_paths)
+    evaluator.evaluate_dataset(datafile_paths)
     evaluator.aggregate_analyzer.analyze()
 
 if __name__ == "__main__":
