@@ -8,5 +8,7 @@ class PerformanceResult:
     max_drawdown: float
     profit_factor: float
     trader: int
+    trade_count: int
+    idle_time: float
     equity_curve: list[tuple[int,float]]
     #adding more later

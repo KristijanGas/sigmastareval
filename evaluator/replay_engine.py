@@ -24,8 +24,6 @@ def _json_default(value):
         return str(value)
     return str(value)
 
-from analytics.aggregate_analyzer import AggregateAnalyzer
-from analytics.performance_analyzer import PerformanceAnalyzer
 from bot.masterbot import masterbot
 from market_simulator import market_simulator
 from data_provider.historical_provider import historical_provider
@@ -35,8 +33,7 @@ class replay_engine:
     def __init__(self, bot: masterbot, reset_bot_between_runs=True):
         self.bot = bot
         self.reset_bot_between_runs = reset_bot_between_runs
-        self.aggregate_analyzer = AggregateAnalyzer() # for whole dataset
-        self.performance_analyzer = None # different for each datapoint/iteration
+
 
     def initialize_environment(self, starting_cash, data, filename):
         """
@@ -71,7 +68,7 @@ class replay_engine:
         
         self.data_provider.set_end_timestamp(data["metadata_end"][0]["endDate"])
         self.data_provider.set_price_to_beat(data["metadata_end"][0]["eventMetadata"]["priceToBeat"])
-        self.performance_analyzer = PerformanceAnalyzer(starting_cash)
+
         return True
 
 
@@ -275,7 +272,6 @@ def main():
     print(f"Loaded bot: {bot.__class__.__name__}")
     evaluator = replay_engine(bot, reset_bot_between_runs=False)
     evaluator.evaluate_dataset(datafile_paths)
-    evaluator.aggregate_analyzer.analyze()
 
 if __name__ == "__main__":
     main()

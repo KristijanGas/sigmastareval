@@ -23,10 +23,13 @@ class PerformanceAnalyzer:
             self.data = json.load(f)
         self.generate_equity_curve()
         self.build_closed_trades_fifo(self.data["transactions"], self.data["resolution"], include_fees=True)
-        self.plot_trade_pnl_bars()
+        #self.plot_trade_pnl_bars()
         self.performance_result.pnl = self.pnl()
         self.performance_result.roi = self.roi()
         self.performance_result.max_drawdown = self.max_drawdown()
+        self.performance_result.idle_time = self.idle_time()
+        self.performance_result.profit_factor = self.profit_factor()
+        self.performance_result.trade_count = self.trade_count()
         #self.plot_equity_breakdown()
         #self.plot_equity_curve()
         # analyze here
@@ -159,20 +162,25 @@ class PerformanceAnalyzer:
         return None
     
     # average entry price relative to subsequent price movement
+    # how good the entry price was compared with future prices
     def entry_quality(self):
         return None
     
     # how close was the selling price to the best available price later?
+    # did a bot exit near a local best price
     def exit_timing(self):
         return None
     
     # average exit price relative to subsequent price movement
+    # how good the exit price was compared with prices before/after exit
     def exit_quality(self):
         return None
     
+    # entries that quickly moved against the bot and never recovered much
     def false_entries(self):
         return None
     
+    # exits followed by a significantly better price soon after
     def premature_exits(self):
         return None
     
@@ -194,7 +202,10 @@ class PerformanceAnalyzer:
             return 0
     
     def trade_count(self):
-        return None
+        if not self.closed_trades:
+            return None
+
+        return len(self.closed_trades)
     
     # total profit / total losses (for all trades in one market)
     def profit_factor(self):
