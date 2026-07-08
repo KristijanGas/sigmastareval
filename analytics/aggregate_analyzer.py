@@ -86,8 +86,10 @@ class AggregateAnalyzer:
         return median(r.trade_count for r in self.results)
     
     def stdev_trade_count(self):
+        values = [r.trade_count for r in self.results]
+        clean_values = self.clean(values)
         if self.markets_tested() > 1:
-            return stdev(r.trade_count for r in self.results)
+            return stdev(clean_values)
         else:
             return None
     
