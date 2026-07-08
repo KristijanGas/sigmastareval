@@ -191,8 +191,10 @@ class market_simulator:
                     raise ValueError(f"Unknown order action: {order_action}")
                 #self.orders.remove(order) # fills entirely or dies instantly
                 orderIDs_to_remove.append(order["order_id"])
+            fee = 0
             if self.new_order.get(order["order_id"], False):
-                self.current_cash -= self.calculate_fee(price, successful_matches)
+                fee = self.calculate_fee(price, successful_matches)
+                self.current_cash -= fee
             if successful_matches > 0:
                 #print(f"Order {order['order_id']} matched {successful_matches} shares of asset {asset_id} at price {price}. Current cash: {self.current_cash:.2f}, User holdings: {self.user_holdings.get(asset_id, 0)}")
                 self.transactions.append(
@@ -203,7 +205,7 @@ class market_simulator:
                         "order_type": order_type,
                         "successful_matches": successful_matches,
                         "money_change": self.current_cash - cash_before_this_order,
-                        "fee": self.calculate_fee(price, order_size),
+                        "fee": fee,
                         "price": price,
                         "money_after_order": self.current_cash,
                         "user_holdings_after_order": self.user_holdings.get(asset_id, 0),
