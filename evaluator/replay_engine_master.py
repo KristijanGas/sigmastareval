@@ -15,12 +15,25 @@ for dataset in dataset_paths:
         file = data_file.resolve()
         files.append(file)
 
-
+process_count = 24
+partition_size = len(files) // process_count
+partition_remainder_size = len(files) - partition_size * process_count
+file_partitions = []
+added_extra = 0
+for i in range(0,process_count):
+    add_list = []
+    for j in range(partition_size):
+        offset = i * partition_size + j + added_extra
+        add_list.append(files[offset])
+    if added_extra < partition_remainder_size:
+        add_list.append(files[(i+1) * partition_size + added_extra])
+        added_extra+=1
+    file_partitions.append(add_list)
 
 try:
-    for data_file in files:
-        print(f"Starting evaluation for {data_file}...")
-        process = subprocess.Popen([sys.executable, "evaluator/replay_engine.py", bot_path, str(data_file)])
+    for file_sublist in file_partitions:
+        print(f"Starting evaluation...")
+        process = subprocess.Popen([sys.executable, "evaluator/replay_engine.py", bot_path, *file_sublist])
         processes.append(process)
     for process in processes:
         process.wait()
@@ -31,5 +44,3 @@ except KeyboardInterrupt:
     for process in processes:
         process.wait()
     print("All evaluator processes terminated.")
-
-    
