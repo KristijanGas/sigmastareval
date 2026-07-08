@@ -80,10 +80,14 @@ class AggregateAnalyzer:
     
 
     def average_trade_count(self):
-        return mean(r.trade_count for r in self.results)
+        values = [r.trade_count for r in self.results]
+        clean_values = self.clean(values)
+        return mean(clean_values)
     
     def median_trade_count(self):
-        return median(r.trade_count for r in self.results)
+        values = [r.trade_count for r in self.results]
+        clean_values = self.clean(values)
+        return median(clean_values)
     
     def stdev_trade_count(self):
         values = [r.trade_count for r in self.results]
@@ -94,10 +98,14 @@ class AggregateAnalyzer:
             return None
     
     def min_trade_count(self):
-        return min(r.trade_count for r in self.results)
+        values = [r.trade_count for r in self.results]
+        clean_values = self.clean(values)
+        return min(clean_values)
     
     def max_trade_count(self):
-        return max(r.trade_count for r in self.results)
+        values = [r.trade_count for r in self.results]
+        clean_values = self.clean(values)
+        return max(clean_values)
     
 
     def average_idle_time(self):
