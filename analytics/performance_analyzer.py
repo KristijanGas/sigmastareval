@@ -6,6 +6,7 @@ from datetime import datetime
 from bot.order_actions import OrderAction
 from collections import deque
 from statistics import mean, median
+from analytics.graph_drawer import draw_graph
 
 # performance analyzer for one market run
 class PerformanceAnalyzer:
@@ -31,7 +32,10 @@ class PerformanceAnalyzer:
         self.performance_result.profit_factor = self.profit_factor()
         self.performance_result.trade_count = self.trade_count()
         self.performance_result.final_cash = self.data["final_cash"]
+        self.performance_result.total_fees_paid = self.total_fees_paid()  # multiply by x to scale on graph
+        #self.run_decision_quality_methods()
         #self.plot_equity_breakdown()
+        #draw_graph(self.data, show=True)
         #self.plot_equity_curve()
         # analyze here
         return self.performance_result
@@ -158,32 +162,7 @@ class PerformanceAnalyzer:
         idle_fraction = idle_time / total_time
         return idle_fraction
     
-    # how close was the entry price to the best available price later?
-    def entry_timing(self):
-        return None
-    
-    # average entry price relative to subsequent price movement
-    # how good the entry price was compared with future prices
-    def entry_quality(self):
-        return None
-    
-    # how close was the selling price to the best available price later?
-    # did a bot exit near a local best price
-    def exit_timing(self):
-        return None
-    
-    # average exit price relative to subsequent price movement
-    # how good the exit price was compared with prices before/after exit
-    def exit_quality(self):
-        return None
-    
-    # entries that quickly moved against the bot and never recovered much
-    def false_entries(self):
-        return None
-    
-    # exits followed by a significantly better price soon after
-    def premature_exits(self):
-        return None
+
     
     def avg_entry_probability(self):
         return None
@@ -241,7 +220,10 @@ class PerformanceAnalyzer:
 
     # how much money did the bot earn for every dollar spent on fees
     def fee_efficiency(self):
-        return self.pnl() / self.total_fees_paid()
+        if self.total_fees_paid() > 0:
+            return self.pnl() / self.total_fees_paid()
+        else:
+            return None
     
     # overtrading metric (how aggressively the bot trades relative to its capital)
     def turnover(self):
@@ -249,6 +231,10 @@ class PerformanceAnalyzer:
             t["price"] * t["successful_matches"] 
             for t in self.data["transactions"])
         return total_traded_volume / self.initial_balance
+    
+    def total_traded_volume(self):
+        return sum(t["price"] * t["successful_matches"] 
+                    for t in self.data["transactions"])
     
 
     #used for trade related metrics
@@ -336,6 +322,7 @@ class PerformanceAnalyzer:
                     "exit_timestamp": tx["timestamp"],
                     "entry_timestamp": earliest_entry_timestamp,
                     "quantity": qty,
+                    "entry_price": cost_basis/qty,
                     "exit_price": price,
                     "proceeds": proceeds,
                     "cost_basis": cost_basis,
@@ -380,6 +367,7 @@ class PerformanceAnalyzer:
                     "entry_timestamp": earliest_entry_timestamp,
                     "exit_timestamp": None,
                     "quantity": total_qty,
+                    "entry_price": cost_basis/total_qty,
                     "exit_price": settlement_price,
                     "proceeds": proceeds,
                     "cost_basis": cost_basis,
@@ -461,6 +449,142 @@ class PerformanceAnalyzer:
         plt.title("Profit per Closed Trade")
 
         plt.show()
+
+
+    # Decision quality metrics
+    # ========================
+
+    def get_price_window(self, asset_id, start_ts, end_ts=None):
+        prices = self.data["mid_prices"].get(asset_id,[])
+        
+        window = []
+        for p in prices:
+            ts = p["timestamp"]
+            if ts < start_ts:
+                continue
+            if end_ts is not None and ts > end_ts:
+                continue
+
+            window.append(p)
+        return window
+
+    # Maximum Adverse Excursion
+    # how far price moved against the bot while trade was open
+    def entry_mae(self, trade):
+        prices = self.get_price_window(trade["asset_id"], trade["entry_timestamp"], trade["exit_timestamp"])
+
+        if not prices:
+            return None
+        entry_price = trade["entry_price"]
+        min_price = min(p["mid_price"] for p in prices)
+
+        return entry_price - min_price
+    
+    # Maximum Favorable Excursion
+    # how far price moved in favor of the bot while trade was open
+    def entry_mfe(self, trade):
+        prices = self.get_price_window(trade["asset_id"], trade["entry_timestamp"], trade["exit_timestamp"])
+        if not prices:
+            return None
+        
+        entry_price = trade["entry_price"]
+        max_price = max(p["mid_price"] for p in prices)
+
+        return max_price - entry_price        
+    
+    # Fraction of the best possible move captured
+    def exit_efficiency(self, trade):
+        """
+        1.0 = exited at best price while trade was open
+        0.5 = captured half of available move
+        0.0 = no favorable move captured
+        """
+        prices = self.get_price_window(trade["asset_id"], trade["entry_timestamp"], trade["exit_timestamp"]) 
+        if not prices:
+            return None
+        entry_price = trade["entry_price"]
+        exit_price = trade["exit_price"]
+        best_price = max(p["mid_price"] for p in prices)
+
+        max_possible_gain = best_price - entry_price
+        actual_gain = exit_price - entry_price
+        
+        if max_possible_gain <= 0:
+            return None     # or maybe return 0
+        
+        return actual_gain / max_possible_gain
+    
+    # returns true if price improved by more than threshold after exit - exited too early
+    # threshold=0.10 means 10 cents on a prediction-market contract
+    def was_premature_exit(self, trade, threshold=0.10):
+        if trade["exit_timestamp"] is None:     # doesn't count - no exit at all
+            return False
+
+        market_end_ts = self.data["timestamps"][-1]     # probably change later
+        prices_after_exit = self.get_price_window(trade["asset_id"], trade["exit_timestamp"], market_end_ts)
+
+        if not prices_after_exit:
+            return False
+        exit_price = trade["exit_price"]
+        future_best = max(p["mid_price"] for p in prices_after_exit)
+
+        return (future_best - exit_price >= threshold)
+    
+    def premature_exit_rate(self, threshold=0.10):
+        exited_trades = [t for t in self.closed_trades if t["closed_by"] == "ASK"]  #trades that weren't closed automatically after resolving
+
+        if not exited_trades:
+            return None
+        premature_count = sum (self.was_premature_exit(trade=t, threshold=threshold) for t in exited_trades)
+        return premature_count / len(exited_trades)
+    
+
+    # false entry if price moves against the bot by adverse_threshold
+    # before it ever moves in favor by favorable_threshold.
+    def was_false_entry(self, trade, adverse_threshold=0.10, favorable_threshold=0.05):
+        prices = self.get_price_window(trade["asset_id"], trade["entry_timestamp"], trade["exit_timestamp"])
+        if not prices:
+            return False
+        
+        entry_price = trade["entry_price"]
+        for p in prices:
+            move = p["mid_price"] - entry_price
+            if move >= favorable_threshold:
+                return False
+            if move <= -adverse_threshold:
+                return True
+        return False
+    
+    def false_entry_rate(self, adverse_threshold=0.10, favorable_threshold=0.05):
+        if not self.closed_trades:
+            return None
+        false_count = sum(self.was_false_entry(trade=t, adverse_threshold=adverse_threshold, favorable_threshold=favorable_threshold) 
+                            for t in self.closed_trades)
+        return false_count / len(self.closed_trades)
+    
+    def run_decision_quality_methods(self):
+        for trade in self.closed_trades:
+            trade["entry_mae"] = self.entry_mae(trade)
+            print(trade["entry_mae"])
+            trade["entry_mfe"] = self.entry_mfe(trade)
+            trade["exit_efficiency"] = self.exit_efficiency(trade)
+
+        summary = {
+            "avg_entry_mae": mean_ignore_none(t["entry_mae"] for t in self.closed_trades),
+            "avg_entry_mfe": mean_ignore_none(t["entry_mfe"] for t in self.closed_trades),
+            "avg_exit_efficiency": mean_ignore_none(t["exit_efficiency"] for t in self.closed_trades),
+            "premature_exit_rate": self.premature_exit_rate(threshold=0.10),
+            "false_entry_rate": self.false_entry_rate(),
+        }
+        print(summary)
+    
+
+def mean_ignore_none(values):
+    values = [v for v in values if v is not None]
+    if not values:
+        return None
+
+    return sum(values) / len(values)
 
     
 #analyzer = PerformanceAnalyzer(100)

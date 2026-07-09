@@ -259,8 +259,8 @@ class AggregateAnalyzer:
             "Success Statistics\n"
             "──────────────────────────────\n"
             f"Markets Tested:       {self.markets_tested()}\n"
-            f"Profitable:           {sum(r.pnl > 0 for r in self.results)} ({round(self.profitable_markets(),2)*100}%)\n"
-            f"Losing:               {sum(r.pnl < 0 for r in self.results)} ({round(self.losing_markets(),2)*100}%)\n"
+            f"Profitable:           {sum(r.pnl > 0 for r in self.results)} ({round(self.profitable_markets()*100,2)}%)\n"
+            f"Losing:               {sum(r.pnl < 0 for r in self.results)} ({round(self.losing_markets()*100,2)}%)\n"
             f"No Trades:            {sum(r.trade_count == 0 for r in self.results)}\n"
         )       
 
@@ -305,11 +305,17 @@ class AggregateAnalyzer:
             0.25    # height
         ])
 
-        cash = np.sort([r.final_cash for r in self.results])
-        x = np.linspace(0, 100, len(cash))
+        cash_fee_pairs = [(r.final_cash, r.total_fees_paid) for r in self.results]
+        cash_fee_pairs.sort(key=lambda x: x[0])
+        cash = [x[0] for x in cash_fee_pairs]
+        fee = [x[1] for x in cash_fee_pairs]
+        #print(cash_fee_pairs)
+        #cash = np.sort([r.final_cash for r in self.results])
+        x = np.linspace(0, 100, len(cash_fee_pairs))
 
         initial_balance = 100
         ax_curve.plot(x, cash, linewidth=2, label="Final cash")
+        ax_curve.plot(x, fee, linewidth=2, label="Total fees paid")
         ax_curve.axhline(initial_balance, linestyle="--", color="gray",
                         label="Initial balance")
 

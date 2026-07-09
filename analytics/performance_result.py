@@ -12,4 +12,5 @@ class PerformanceResult:
     idle_time: float
     equity_curve: list[tuple[int,float]]
     final_cash: float
+    total_fees_paid: float
     #adding more later
