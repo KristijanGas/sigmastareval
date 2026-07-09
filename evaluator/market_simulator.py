@@ -158,10 +158,14 @@ class market_simulator:
 
                 if order_action == OrderAction.BID:
                     money_spent, successful_matches, update_asks = self.match_buy(asset_id, order_size, price, self.current_cash)
+                    successful_matches = round(successful_matches, 2)
+                    money_spent = round(money_spent, 8)
                     self.current_cash -= money_spent
                     self.user_holdings[asset_id] = self.user_holdings.get(asset_id, 0) + successful_matches
                 elif order_action == OrderAction.ASK:
                     money_earned, successful_matches, update_bids = self.match_sell(asset_id, min(order_size, self.user_holdings.get(asset_id, 0)), price)
+                    successful_matches = round(successful_matches, 2)
+                    money_earned = round(money_earned, 8)
                     self.current_cash += money_earned
                     self.user_holdings[asset_id] = self.user_holdings.get(asset_id, 0) - successful_matches
                 else:
