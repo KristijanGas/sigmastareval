@@ -192,9 +192,11 @@ class market_simulator:
                 #self.orders.remove(order) # fills entirely or dies instantly
                 orderIDs_to_remove.append(order["order_id"])
             fee = 0
+            self.user_holdings[asset_id] = round(self.user_holdings.get(asset_id, 0), 2)
             if self.new_order.get(order["order_id"], False):
                 fee = self.calculate_fee(price, successful_matches)
                 self.current_cash -= fee
+            successful_matches = round(successful_matches, 2)
             if successful_matches > 0:
                 #print(f"Order {order['order_id']} matched {successful_matches} shares of asset {asset_id} at price {price}. Current cash: {self.current_cash:.2f}, User holdings: {self.user_holdings.get(asset_id, 0)}")
                 self.transactions.append(

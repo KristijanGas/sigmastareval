@@ -146,7 +146,7 @@ class AggregateAnalyzer:
     def stdev_profit_factor(self):
         values = [r.profit_factor for r in self.results]
         valid_profit_factors = self.clean(values)
-        if self.markets_tested() > 1:
+        if self.markets_tested() > 1 and len(valid_profit_factors) > 1:
             return stdev(valid_profit_factors)
         else:
             return None
