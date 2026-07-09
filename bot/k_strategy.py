@@ -26,12 +26,14 @@ class KStrategy(masterbot):
         self.money_reserved_for_down = 0.0
         self.up_shares = 0.0
         self.down_shares = 0.0
+        self.past_crypto_predictions = []
 
         #parameters
         self.time_volatility_alpha = 500
-        self.past_window_size = 25 * 1000 # 5 seconds
-        self.polynomial_degree = 4
+        self.past_window_size = 30 * 1000 # 5 seconds
+        self.polynomial_degree = 2
         self.investment_cash_percent = 0.1
+        self.lookahead_time = 500
         self.trend_alpha = 1
         self.price_difference_threshold = 0.05
         self.crypto_price_stdev = {"bitcoin-up-or-down": 50, "ethereum-up-or-down": 1.5, "solana-up-or-down": 0.0664, "xrp-up-or-down": 0.00164}  # Example values for standard deviation of crypto prices
@@ -50,6 +52,7 @@ class KStrategy(masterbot):
             self.past_crypto_values = deque()
             self.past_crypto_rel_timestamps = deque()
             self.first_run = False
+            self.past_crypto_predictions.clear()
     def actual_value(self, time_volatility, percentage_towards):
         return percentage_towards * time_volatility
 
@@ -109,7 +112,7 @@ class KStrategy(masterbot):
 
         self.update_cash_reservations()
         self.update_past_crypto_values()
-        if len(self.past_crypto_rel_timestamps) < 6:
+        if len(self.past_crypto_rel_timestamps) < 10:
             return  # Not enough data to make predictions yet
         self.up_shares = self.market.get_user_holdings().get(self.up_token_id, 0)
         self.down_shares = self.market.get_user_holdings().get(self.down_token_id, 0)
@@ -126,8 +129,12 @@ class KStrategy(masterbot):
         crypto_current_stdev /= time_factor
 
         current_rel_timestamp = (self.data_provider.get_current_timestamp() - self.data_provider.get_end_timestamp())
-        lookahead_time = 500  + current_rel_timestamp # 5 minutes in milliseconds
-        crypto_trend_stdev = self.predict_future_crypto_value(lookahead_time) / self.crypto_price_stdev.get(self.market.base_name)
+
+        lookahead_timestamp = self.lookahead_time  + current_rel_timestamp # 5 minutes in milliseconds
+        crypto_prediction = self.predict_future_crypto_value(lookahead_timestamp)
+        self.past_crypto_predictions.append({"timestamp": self.data_provider.get_current_timestamp() + self.lookahead_time, "prediction": crypto_prediction})
+
+        crypto_trend_stdev = crypto_prediction / self.crypto_price_stdev.get(self.market.base_name)
         #print(f"Crypto trend stdev: {crypto_trend_stdev:.6f}")
         final_crypto_estimate = crypto_current_stdev + crypto_trend_stdev * self.trend_alpha
 

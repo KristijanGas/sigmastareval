@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -25,7 +25,7 @@ def _coerce_number(value):
 	return value
 
 
-def _series_from_points(points, value_key="price"):
+def _series_from_points(points, value_key):
 	timestamps = []
 	values = []
 	for index, point in enumerate(points or []):
@@ -45,21 +45,33 @@ def _series_from_points(points, value_key="price"):
 
 
 def _timestamp_to_datetime(timestamp):
-	if timestamp is None:
-		return None
-	if isinstance(timestamp, datetime):
-		return timestamp
-	if isinstance(timestamp, (int, float)):
-		if abs(timestamp) >= 1_000_000_000_000:
-			return datetime.fromtimestamp(timestamp / 1000.0)
-		return datetime.fromtimestamp(timestamp)
-	if isinstance(timestamp, str):
-		try:
-			parsed = float(timestamp)
-			return _timestamp_to_datetime(parsed)
-		except ValueError:
-			return timestamp
-	return timestamp
+    if timestamp is None:
+        return None
+
+    if isinstance(timestamp, datetime):
+        return timestamp
+
+    if isinstance(timestamp, (int, float)):
+        if abs(timestamp) >= 1_000_000_000_000:
+            return datetime.fromtimestamp(timestamp / 1000)
+        return datetime.fromtimestamp(timestamp)
+
+    if isinstance(timestamp, str):
+        # unix timestamp stored as string
+        try:
+            return _timestamp_to_datetime(float(timestamp))
+        except ValueError:
+            pass
+
+        # ISO8601
+        try:
+            return datetime.fromisoformat(
+                timestamp.replace("Z", "+00:00")
+            )
+        except ValueError:
+            pass
+
+    raise ValueError(f"Unsupported timestamp: {timestamp!r}")
 
 
 def _set_dynamic_ylim(axis, values):
@@ -190,16 +202,27 @@ def draw_graph(analytics: dict, output_path: str | Path | None = None, show: boo
 
 	crypto_timestamps, crypto_values = _series_from_points(crypto_prices, value_key="price")
 	relative_crypto_values = [value - price_to_beat for value in crypto_values]
+	crypto_prediction_timestamps, crypto_prediction_values = _series_from_points(analytics.get("past_crypto_predictions", []), value_key="prediction")
+	crypto_prediction_values_relative = [value for value in crypto_prediction_values]
+
 	if crypto_timestamps and crypto_values:
 		ax_crypto.plot(
 			crypto_timestamps,
 			relative_crypto_values,
-			color="#2ca02c",
+			color="#12db12ff",
 			linewidth=1.8,
 			label="crypto price",
 		)
+		ax_crypto.plot(
+			crypto_prediction_timestamps,
+			crypto_prediction_values_relative,
+			color="#ff0ef36c",
+			linewidth=1.2,
+			label="crypto prediction",
+		)
 		ax_crypto.fill_between(crypto_timestamps, relative_crypto_values, color="#2ca02c", alpha=0.1)
 		_set_dynamic_ylim(ax_crypto, relative_crypto_values)
+	_set_dynamic_ylim(ax_crypto, crypto_prediction_values_relative)
 	if isinstance(price_to_beat, (int, float)):
 		ax_crypto.axhline(
 			0,
