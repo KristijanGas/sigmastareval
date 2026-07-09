@@ -204,7 +204,7 @@ class replay_engine:
                     analytics_path = self.get_analysis_path(gz_file)
                     analytics_path.parent.mkdir(parents=True, exist_ok=True)
                     analytics_path.write_text(json.dumps(analytics, indent=2, default=_json_default), encoding="utf-8")
-                    print(f"Saved analytics to {analytics_path}")
+                    print(f"Saved analytics to {analytics_path}, final cash: {analytics['final_cash']}")
                     #outcomes.append((round(analytics["final_cash"], 2), analytics_path))
 
         #for outcome, analytics_path in outcomes:

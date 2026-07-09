@@ -84,17 +84,21 @@ class AggregateAnalyzer:
     def average_trade_count(self):
         values = [r.trade_count for r in self.results]
         clean_values = self.clean(values)
+        if len(clean_values) == 0:
+            return 0
         return mean(clean_values)
     
     def median_trade_count(self):
         values = [r.trade_count for r in self.results]
         clean_values = self.clean(values)
+        if len(clean_values) == 0:
+            return 0
         return median(clean_values)
     
     def stdev_trade_count(self):
         values = [r.trade_count for r in self.results]
         clean_values = self.clean(values)
-        if self.markets_tested() > 1:
+        if self.markets_tested() > 1 and len(clean_values) > 1:
             return stdev(clean_values)
         else:
             return None
@@ -102,11 +106,15 @@ class AggregateAnalyzer:
     def min_trade_count(self):
         values = [r.trade_count for r in self.results]
         clean_values = self.clean(values)
+        if len(clean_values) == 0:
+            return 0
         return min(clean_values)
     
     def max_trade_count(self):
         values = [r.trade_count for r in self.results]
         clean_values = self.clean(values)
+        if len(clean_values) == 0:
+            return 0
         return max(clean_values)
     
 
@@ -137,10 +145,14 @@ class AggregateAnalyzer:
 
     def average_profit_factor(self):
         valid_profit_factors = self.clean([r.profit_factor for r in self.results])
+        if len(valid_profit_factors) == 0:
+            return 0
         return mean(valid_profit_factors)
     
     def median_profit_factor(self):
         valid_profit_factors = self.clean([r.profit_factor for r in self.results])
+        if len(valid_profit_factors) == 0:
+            return 0
         return median(valid_profit_factors)
     
     def stdev_profit_factor(self):
@@ -153,11 +165,15 @@ class AggregateAnalyzer:
     
     def min_profit_factor(self):
         valid_profit_factors = self.clean([r.profit_factor for r in self.results])
+        if len(valid_profit_factors) == 0:
+            return 0
         return min(valid_profit_factors)
     
     def max_profit_factor(self):
         values = [r.profit_factor for r in self.results]
         clean_values = self.clean_none(values)
+        if len(clean_values) == 0:
+            return 0
         return max(clean_values)
     
     # ratio
