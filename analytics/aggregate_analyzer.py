@@ -2,6 +2,7 @@ from analytics.performance_result import PerformanceResult
 from statistics import mean, median, stdev
 import matplotlib.pyplot as plt
 import math
+import numpy as np
 
 #analyzes data from the whole dataset
 class AggregateAnalyzer:
@@ -12,6 +13,7 @@ class AggregateAnalyzer:
     def analyze(self):
         #print(self.profitable_markets())
         self.output_table()
+        #self.plot_final_cash_distribution()
         return None
 
     def add_result(self, result: PerformanceResult):
@@ -144,7 +146,7 @@ class AggregateAnalyzer:
     def stdev_profit_factor(self):
         values = [r.profit_factor for r in self.results]
         valid_profit_factors = self.clean(values)
-        if self.markets_tested() > 1:
+        if self.markets_tested() > 1 and len(valid_profit_factors) > 1:
             return stdev(valid_profit_factors)
         else:
             return None
@@ -210,41 +212,26 @@ class AggregateAnalyzer:
         columns = ["Mean", "Median", "Std Dev", "Min", "Max"]
         rows = ["ROI (%)", "Pnl ($)", "Max Drawdown (%)", "Trades", "Idle Time (%)", "Profit Factor"]
 
-        # fig, ax = plt.subplots()
-        # ax.axis("off")
 
-        # table = ax.table(
-        #     cellText=values,
-        #     colLabels=columns,
-        #     rowLabels=rows,
-        #     loc="center",
-        # )
-
-        # table.auto_set_font_size(False)
-        # table.set_fontsize(12)
-        # table.scale(1, 1.5)
-
-        # plt.tight_layout()
-        # plt.show()
-
-        fig, ax = plt.subplots(figsize=(10, 8))
-        ax.axis("off")
-
-        # Main title
-        fig.suptitle(
-            "Bot Analysis",
-            fontsize=18,
-            fontweight="bold",
-            y=0.97
+        fig = plt.figure(figsize=(11, 10))
+        gs = fig.add_gridspec(
+            nrows=4,
+            ncols=2,
+            height_ratios=[4, 0.9, 0.9, 3]
         )
 
-        # Move table towards the top
-        table = ax.table(
+        fig.suptitle("Bot Analysis", fontsize=18, fontweight="bold")
+
+        # ---------------- Table ----------------
+        ax_table = fig.add_subplot(gs[0, :])
+        ax_table.axis("off")
+
+        table = ax_table.table(
             cellText=values,
             colLabels=columns,
             rowLabels=rows,
-            cellLoc="center",
-            loc="upper center",
+            loc="center",
+            cellLoc="center"
         )
 
         table.auto_set_font_size(False)
@@ -262,12 +249,13 @@ class AggregateAnalyzer:
         )       
 
 
-        fig.text(
-            0.05,      # x
-            0.33,      # y
+        ax_success = fig.add_subplot(gs[1, 0])
+        ax_success.axis("off")
+        ax_success.text(
+            0, 1,
             success_text,
-            fontsize=11,
             family="monospace",
+            fontsize=11,
             va="top"
         )
 
@@ -282,14 +270,67 @@ class AggregateAnalyzer:
             f"Highest Drawdown:  {round(self.worst_drawdown(),2)}%\n"
         )
 
-        fig.text(
-            0.55,
-            0.33,
+        ax_extreme = fig.add_subplot(gs[1, 1])
+        ax_extreme.axis("off")
+        ax_extreme.text(
+            0, 1,
             extreme_text,
-            fontsize=11,
             family="monospace",
+            fontsize=11,
             va="top"
         )
 
-        plt.tight_layout(rect=[0, 0.25, 1, 0.93])
+        #ax_curve = fig.add_subplot(gs[3, :])
+
+        ax_curve = fig.add_axes([
+            0.18,   # left
+            0.06,   # bottom
+            0.64,   # width
+            0.25    # height
+        ])
+
+        cash = np.sort([r.final_cash for r in self.results])
+        x = np.linspace(0, 100, len(cash))
+
+        initial_balance = 100
+        ax_curve.plot(x, cash, linewidth=2, label="Final cash")
+        ax_curve.axhline(initial_balance, linestyle="--", color="gray",
+                        label="Initial balance")
+
+        ax_curve.set_title("Final Cash Distribution")
+        ax_curve.set_xlabel("Market Percentile")
+        ax_curve.set_ylabel("Final Cash")
+        ax_curve.grid(alpha=0.3)
+        ax_curve.legend()
+
+        plt.tight_layout(rect=[0, 0, 1, 0.96])
+        plt.show()
+
+
+    def plot_final_cash_distribution(self, initial_balance=100):
+        # Sort outcomes
+        final_cash_values = [r.final_cash for r in self.results]
+        cash = np.sort(np.asarray(final_cash_values))
+
+        # X-axis is simply the market rank
+        x = np.arange(1, len(cash) + 1)
+
+        plt.figure(figsize=(9, 5))
+        plt.plot(x, cash, linewidth=2, label="Final cash")
+
+        # Optional: show initial balance
+        if initial_balance is not None:
+            plt.axhline(
+                initial_balance,
+                color="gray",
+                linestyle="--",
+                label="Initial balance"
+            )
+
+        plt.xlabel("Markets (sorted by final cash)")
+        plt.ylabel("Final cash")
+        plt.title("Distribution of Final Cash Across Markets")
+        plt.grid(True, alpha=0.3)
+        plt.legend()
+        plt.tight_layout()
         plt.show()

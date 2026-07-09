@@ -11,4 +11,5 @@ class PerformanceResult:
     trade_count: int
     idle_time: float
     equity_curve: list[tuple[int,float]]
+    final_cash: float
     #adding more later

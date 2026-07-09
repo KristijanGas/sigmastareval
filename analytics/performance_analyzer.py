@@ -30,6 +30,7 @@ class PerformanceAnalyzer:
         self.performance_result.idle_time = self.idle_time()
         self.performance_result.profit_factor = self.profit_factor()
         self.performance_result.trade_count = self.trade_count()
+        self.performance_result.final_cash = self.data["final_cash"]
         #self.plot_equity_breakdown()
         #self.plot_equity_curve()
         # analyze here
