@@ -16,6 +16,7 @@ class ProfitBot(masterbot):
         self.long_window_size = 20
         self.stop_loss_percentage = 0.97  # 3% stop loss
         self.take_profit_percentage = 1.03  # 3% take profit
+        self.investment_cash_percent = 1.0
         self.asset_ids = None
 
     def _clamp(self, value, minimum, maximum):
