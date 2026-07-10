@@ -9,6 +9,8 @@ from importlib.util import module_from_spec, spec_from_file_location
 import json
 import threading
 
+
+
 if __package__ is None or __package__ == "":
     repo_root = Path(__file__).resolve().parents[1]
     if str(repo_root) not in sys.path:
@@ -27,7 +29,7 @@ def _json_default(value):
 from bot.masterbot import masterbot
 from market_simulator import market_simulator
 from data_provider.historical_provider import historical_provider
-
+from bot.prediction_models.nostradamus import nostradamus
 
 class replay_engine:
     def __init__(self, bot: masterbot, reset_bot_between_runs=True):
@@ -65,7 +67,11 @@ class replay_engine:
             print(f"Warning: No event metadata found in the dataset. This may indicate a problem with the dataset. File: {filename}")
             self.eventMetadata = None
             return False
-        
+        predictor = getattr(self.bot, "predictor", None)
+        if predictor is None:
+            self.bot.predictor = nostradamus(data)
+            self.strategy_only_evaluation = True
+
         self.data_provider.set_end_timestamp(data["metadata_end"][0]["endDate"])
         self.data_provider.set_price_to_beat(data["metadata_end"][0]["eventMetadata"]["priceToBeat"])
 

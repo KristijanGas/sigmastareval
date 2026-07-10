@@ -15,7 +15,12 @@ class polynomial_predictor:
         self.past_window_size = 30 * 1000  # 30 seconds
         self.price_to_beat = None  # This will be set externally when the predictor is used
 
-    def predict_future_crypto_value(self, future_timestamp):
+
+
+    def predict_future_crypto_value(self, lookahead_time, current_timestamp, end_timestamp):
+        current_rel_timestamp = (current_timestamp - end_timestamp)
+        future_timestamp = lookahead_time  + current_rel_timestamp
+
         if len(self.past_crypto_rel_timestamps) < 10:
             return None
         scaled_timestamps = []

@@ -10,7 +10,7 @@ from bot.order_types import OrderType
 from bot.masterbot import masterbot
 from bot.order_actions import OrderAction
 from bot.order_types import OrderType
-from bot.prediction_models.predictor import predictor
+from bot.prediction_models.polynomial_predictor import polynomial_predictor
 
 class KStrategy(masterbot):
     def __init__(self, in_production=False, market=None, data_provider=None):
@@ -27,7 +27,7 @@ class KStrategy(masterbot):
         self.up_shares = 0.0
         self.down_shares = 0.0
         self.past_crypto_predictions = []
-        self.predictor = predictor()
+        self.predictor = polynomial_predictor()
 
         #parameters
         self.time_volatility_alpha = 500
@@ -83,7 +83,6 @@ class KStrategy(masterbot):
 
 
     def run(self):
-        
         order_book = self.data_provider.get_order_book()
         self.order_library.append(order_book)
         self.update_cash_reservations()
@@ -103,10 +102,7 @@ class KStrategy(masterbot):
         crypto_current_stdev = (crypto_value - self.price_to_beat) / self.crypto_price_stdev.get(self.market.base_name)
         crypto_current_stdev /= time_factor
 
-        current_rel_timestamp = (self.data_provider.get_current_timestamp() - self.data_provider.get_end_timestamp())
-
-        lookahead_timestamp = self.lookahead_time  + current_rel_timestamp # 5 minutes in milliseconds
-        crypto_prediction = self.predictor.predict_future_crypto_value(lookahead_timestamp)
+        crypto_prediction = self.predictor.predict_future_crypto_value(self.lookahead_time, self.data_provider.get_current_timestamp(),self.data_provider.get_end_timestamp())
         
         if crypto_prediction is None:
             return
