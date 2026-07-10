@@ -314,8 +314,8 @@ class AggregateAnalyzer:
         x = np.linspace(0, 100, len(cash_fee_pairs))
 
         initial_balance = 100
-        ax_curve.plot(x, cash, linewidth=2, label="Final cash")
-        ax_curve.plot(x, fee, linewidth=2, label="Total fees paid")
+        ax_curve.plot(x, cash, linewidth=2, label="final cash")
+        #ax_curve.plot(x, fee, linewidth=2, label="Total fees paid")
         ax_curve.axhline(initial_balance, linestyle="--", color="gray",
                         label="Initial balance")
 
@@ -324,6 +324,19 @@ class AggregateAnalyzer:
         ax_curve.set_ylabel("Final Cash")
         ax_curve.grid(alpha=0.3)
         ax_curve.legend()
+
+        ax_curve_twin = ax_curve.twinx()
+        ax_curve_twin.plot(
+            x,
+            fee,
+            color="#A31414",
+            linewidth=1.2,
+            alpha=0.8,
+            label="Total fees paid",
+        )
+        ax_curve_twin.set_ylabel("Total fees paid")
+        ax_curve_twin.tick_params(axis="y", labelcolor="#000000")
+        ax_curve_twin.legend()
 
         plt.tight_layout(rect=[0, 0, 1, 0.96])
         plt.show()
