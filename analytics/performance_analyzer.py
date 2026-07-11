@@ -290,7 +290,8 @@ class PerformanceAnalyzer:
 
                 while remaining_to_sell >= 0.01:    #0.01 smallest quantity
                     if not open_lots[asset_id]:
-                        raise ValueError(f"ASK without enough open holdings for asset {asset_id}")
+                        break
+                    #    raise ValueError(f"ASK without enough open holdings for asset {asset_id}")
 
                     lot = open_lots[asset_id][0]
                     matched_qty = min(remaining_to_sell, lot["qty"])

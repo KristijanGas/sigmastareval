@@ -35,6 +35,7 @@ class replay_engine:
     def __init__(self, bot: masterbot, reset_bot_between_runs=True):
         self.bot = bot
         self.reset_bot_between_runs = reset_bot_between_runs
+        self.strategy_only_evaluation = False
 
 
     def initialize_environment(self, starting_cash, data, filename):
@@ -68,7 +69,7 @@ class replay_engine:
             self.eventMetadata = None
             return False
         predictor = getattr(self.bot, "predictor", None)
-        if predictor is None:
+        if predictor is None or predictor.__class__.__name__ == "nostradamus":
             self.bot.predictor = nostradamus(data)
             self.strategy_only_evaluation = True
 

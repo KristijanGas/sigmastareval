@@ -206,6 +206,7 @@ def draw_graph(analytics: dict, output_path: str | Path | None = None, show: boo
 	crypto_prediction_values_relative = [value for value in crypto_prediction_values]
 
 	if crypto_timestamps and crypto_values:
+		'''
 		ax_crypto.plot(
 			crypto_timestamps,
 			relative_crypto_values,
@@ -213,6 +214,8 @@ def draw_graph(analytics: dict, output_path: str | Path | None = None, show: boo
 			linewidth=1.8,
 			label="crypto price",
 		)
+		ax_crypto.fill_between(crypto_timestamps, relative_crypto_values, color="#2ca02c", alpha=0.1)
+		'''
 		ax_crypto.plot(
 			crypto_prediction_timestamps,
 			crypto_prediction_values_relative,
@@ -220,9 +223,9 @@ def draw_graph(analytics: dict, output_path: str | Path | None = None, show: boo
 			linewidth=1.2,
 			label="crypto prediction",
 		)
-		ax_crypto.fill_between(crypto_timestamps, relative_crypto_values, color="#2ca02c", alpha=0.1)
-		_set_dynamic_ylim(ax_crypto, relative_crypto_values)
-	_set_dynamic_ylim(ax_crypto, crypto_prediction_values_relative)
+
+
+	#_set_dynamic_ylim(ax_crypto, crypto_prediction_values_relative + relative_crypto_values)
 	if isinstance(price_to_beat, (int, float)):
 		ax_crypto.axhline(
 			0,

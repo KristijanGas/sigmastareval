@@ -21,9 +21,13 @@ class AggregateAnalyzer:
 
 
     def average_roi(self):
+        if len(self.results) == 0:
+            return 0
         return mean(r.roi for r in self.results)
     
     def median_roi(self):
+        if len(self.results) == 0:
+            return 0
         return median(r.roi for r in self.results)
     
     def stdev_roi(self):
@@ -33,16 +37,24 @@ class AggregateAnalyzer:
             return None
         
     def min_roi(self):
+        if len(self.results) == 0:
+            return 0
         return min(r.roi for r in self.results)
     
     def max_roi(self):
+        if len(self.results) == 0:
+            return 0
         return max(r.roi for r in self.results)
     
 
     def average_pnl(self):
+        if len(self.results) == 0:
+            return 0
         return mean(r.pnl for r in self.results)
     
     def median_pnl(self):
+        if len(self.results) == 0:
+            return 0
         return median(r.pnl for r in self.results)
     
     def stdev_pnl(self):
@@ -52,19 +64,29 @@ class AggregateAnalyzer:
             return None
     
     def min_pnl(self):
+        if len(self.results) == 0:
+            return 0
         return min(r.pnl for r in self.results)
     
     def max_pnl(self):
+        if len(self.results) == 0:
+            return 0
         return max(r.pnl for r in self.results)
 
     def total_pnl(self):
+        if len(self.results) == 0:
+            return 0
         return sum(r.pnl for r in self.results)
     
 
     def average_max_drawdown(self):
+        if len(self.results) == 0:
+            return 0
         return mean(r.max_drawdown for r in self.results)
     
     def median_max_drawdown(self):
+        if len(self.results) == 0:
+            return 0
         return median(r.max_drawdown for r in self.results)
     
     def stdev_max_drawdown(self):
@@ -75,9 +97,13 @@ class AggregateAnalyzer:
     
     # highest max drawdown (across all tested markets)
     def worst_drawdown(self):
+        if len(self.results) == 0:
+            return 0
         return max(r.max_drawdown for r in self.results)
     
     def minimal_max_drawdown(self):
+        if len(self.results) == 0:
+            return 0
         return min(r.max_drawdown for r in self.results)
     
 
@@ -119,9 +145,13 @@ class AggregateAnalyzer:
     
 
     def average_idle_time(self):
+        if len(self.results) == 0:
+            return 0
         return mean(r.idle_time for r in self.results)
     
     def median_idle_time(self):
+        if len(self.results) == 0:
+            return 0
         return median(r.idle_time for r in self.results)
     
     def stdev_idle_time(self):
@@ -131,9 +161,13 @@ class AggregateAnalyzer:
             return None
     
     def min_idle_time(self):
+        if len(self.results) == 0:
+            return 0
         return min(r.idle_time for r in self.results)
     
     def max_idle_time(self):
+        if len(self.results) == 0:
+            return 0
         return max(r.idle_time for r in self.results)
 
 
@@ -178,9 +212,13 @@ class AggregateAnalyzer:
     
     # ratio
     def profitable_markets(self):
+        if len(self.results) == 0:
+            return 0
         return sum(r.pnl > 0 for r in self.results) / self.markets_tested()
     
     def losing_markets(self):
+        if len(self.results) == 0:
+            return 0
         return sum(r.pnl < 0 for r in self.results) / self.markets_tested()
 
     def sharpe_ratio(self):
