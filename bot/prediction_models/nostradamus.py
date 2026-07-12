@@ -23,18 +23,22 @@ class nostradamus:
         return float(self.data["all_prices"][-1]["price"])
     
     def predict_trend(self, lookahead_time, current_timestamp, end_timestamp, stdev,current_price):
-        future_timestamp = lookahead_time  + current_timestamp
-        cnt_future = 0
-        future_price = 0
-        for entry in self.data["all_prices"]:
-            if entry is not None and entry["timestamp"] >= future_timestamp:
-                cnt_future += 1
-                future_price += float(entry["price"])
-            if cnt_future >= 3: # average over to smooth out
-                break
-        if cnt_future != 0:
-            future_price /= cnt_future
-        if future_price == 0:
-            future_price = float(self.data["all_prices"][-1]["price"])
-        difference = (future_price - current_price) / stdev
+        try:
+            future_timestamp = lookahead_time  + current_timestamp
+            cnt_future = 0
+            future_price = 0
+            for entry in self.data["all_prices"]:
+                if entry is not None and entry["timestamp"] >= future_timestamp:
+                    cnt_future += 1
+                    future_price += float(entry["price"])
+                if cnt_future >= 3: # average over to smooth out
+                    break
+            if cnt_future != 0:
+                future_price /= cnt_future
+            if future_price == 0:
+                future_price = float(self.data["all_prices"][-1]["price"])
+            difference = (future_price - current_price) / stdev
+        except Exception as e:
+            print(f"Error in predict_trend: {e}")
+            return 0.0
         return difference

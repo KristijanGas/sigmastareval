@@ -138,6 +138,16 @@ def draw_graph(analytics: dict, output_path: str | Path | None = None, show: boo
 		)
 		price_handles.append(line)
 
+	crypto_prediction_timestamps, crypto_prediction_values = _series_from_points(analytics.get("past_crypto_predictions", []), value_key="up_prediction")
+	crypto_prediction_values_relative = [value for value in crypto_prediction_values]
+	ax_prices.plot(
+		crypto_prediction_timestamps,
+		crypto_prediction_values_relative,
+		color="#ff0ef36c",
+		linewidth=1.2,
+		label="crypto prediction",
+	)
+
 	placed_by_asset = defaultdict(lambda: {"BID": [], "ASK": []})
 	executed_by_asset = defaultdict(lambda: {"BID": [], "ASK": []})
 
@@ -202,11 +212,9 @@ def draw_graph(analytics: dict, output_path: str | Path | None = None, show: boo
 
 	crypto_timestamps, crypto_values = _series_from_points(crypto_prices, value_key="price")
 	relative_crypto_values = [value - price_to_beat for value in crypto_values]
-	crypto_prediction_timestamps, crypto_prediction_values = _series_from_points(analytics.get("past_crypto_predictions", []), value_key="prediction")
-	crypto_prediction_values_relative = [value for value in crypto_prediction_values]
 
 	if crypto_timestamps and crypto_values:
-		'''
+		
 		ax_crypto.plot(
 			crypto_timestamps,
 			relative_crypto_values,
@@ -215,14 +223,6 @@ def draw_graph(analytics: dict, output_path: str | Path | None = None, show: boo
 			label="crypto price",
 		)
 		ax_crypto.fill_between(crypto_timestamps, relative_crypto_values, color="#2ca02c", alpha=0.1)
-		'''
-		ax_crypto.plot(
-			crypto_prediction_timestamps,
-			crypto_prediction_values_relative,
-			color="#ff0ef36c",
-			linewidth=1.2,
-			label="crypto prediction",
-		)
 
 
 	#_set_dynamic_ylim(ax_crypto, crypto_prediction_values_relative + relative_crypto_values)
@@ -278,6 +278,31 @@ def draw_graph(analytics: dict, output_path: str | Path | None = None, show: boo
 			)
 			ax_holdings_twin.set_ylabel("Cash")
 			ax_holdings_twin.tick_params(axis="y", labelcolor="#444444")
+
+			net_worth = []
+			for timestamp, value in zip(cash_timestamps, cash_values):
+				holdings_values = 0
+				
+				for asset_id in holdings_by_asset:
+					asset_points = holdings_by_asset[asset_id]
+					holdings_value = 0.0
+					for i in range(len(asset_points)):
+						if asset_points[i][0] <= timestamp:
+							holdings_value = asset_points[i][1] * analytics.get("mid_prices", {}).get(asset_id)[i].get("mid_price", 0.0)
+						else:
+							holdings_values += holdings_value
+							break
+					
+				net_worth.append(holdings_values + value)
+			ax_holdings_twin.plot(
+				cash_timestamps,
+				net_worth,
+				color="#b30eff",
+				linestyle="-",
+				linewidth=1.4,
+				alpha=0.9,
+				label="net worth",
+			)
 
 	ax_holdings.set_ylabel("Holdings")
 	ax_holdings.yaxis.set_major_locator(MaxNLocator(nbins=5, prune="both"))
