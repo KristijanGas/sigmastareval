@@ -13,7 +13,6 @@ class polynomial_predictor:
         self.past_crypto_values = deque()
         self.past_crypto_rel_timestamps = deque()
         self.past_window_size = 30 * 1000  # 30 seconds
-        self.price_to_beat = None  # This will be set externally when the predictor is used
 
 
 
@@ -37,15 +36,23 @@ class polynomial_predictor:
         prediction = np.polyval(coefficients, future_timestamp)
         #print(f"Predicted future crypto value at timestamp {future_timestamp}: {prediction}")
 
-        return prediction
+        return prediction + self.price_to_beat
     
     def update_past_crypto_values(self, crypto_value, current_timestamp, end_timestamp):
         current_timestamp_rel = (current_timestamp - end_timestamp) # Convert to seconds
         #print(f"Current timestamp: {current_timestamp}, Past crypto timestamps: {list(self.past_crypto_rel_timestamps)}, Past crypto values: {list(self.past_crypto_values)}")
-        self.past_crypto_rel_timestamps.append(current_timestamp_rel)
-        self.past_crypto_values.append(crypto_value)
+        if len(self.past_crypto_rel_timestamps) == 0 or current_timestamp_rel != self.past_crypto_rel_timestamps[-1]:
+            self.past_crypto_rel_timestamps.append(current_timestamp_rel)
+            self.past_crypto_values.append(crypto_value)
         # Remove old values outside the past window size
         #print(len(self.past_crypto_rel_timestamps), len(self.past_crypto_values))
         while self.past_crypto_rel_timestamps and (current_timestamp_rel - self.past_window_size) > self.past_crypto_rel_timestamps[0]:
             self.past_crypto_rel_timestamps.popleft()
             self.past_crypto_values.popleft()
+    def predict_trend(self, lookahead_time, current_timestamp, end_timestamp, stdev, current_price):
+        future_value = self.predict_future_crypto_value(lookahead_time, current_timestamp, end_timestamp)
+        #print(f"Predicted future value: {future_value}, Current price: {current_price}, Stdev: {stdev}")
+        if future_value is None:
+            return 0.0
+        difference = (future_value - current_price) / stdev
+        return difference

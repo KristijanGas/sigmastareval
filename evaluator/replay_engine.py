@@ -79,11 +79,11 @@ class replay_engine:
         return True
 
 
-    def evaluate_datapoint(self, data, filename):
+    def evaluate_datapoint(self, data, filename, starting_cash=100):
         """
         Evaluates a single data point. (usually an hour in an hourly market or 5 mins in a 5 min market)
         """
-        correctly_initialized = self.initialize_environment(100, data, filename)
+        correctly_initialized = self.initialize_environment(starting_cash, data, filename)
         if not correctly_initialized:
             return None
         order_library_size = len(data["all_clobs"])
@@ -231,13 +231,13 @@ class replay_engine:
 
     def evaluate_dataset(self, dataset_path: list[Path]):
 
-
+        starting_cash = 100
         for gz_file in dataset_path:
             with gzip.open(gz_file, "rt", encoding="utf-8") as f:
                 data = json.load(f)
-                analytics = self.evaluate_datapoint(data, gz_file)
+                analytics = self.evaluate_datapoint(data, gz_file, starting_cash)
                 if analytics is not None:
-
+                    #starting_cash = analytics["final_cash"]
                     analytics_path = self.get_analysis_path(gz_file)
                     analytics_path.parent.mkdir(parents=True, exist_ok=True)
                     analytics_path.write_text(json.dumps(analytics, indent=2, default=_json_default), encoding="utf-8")
