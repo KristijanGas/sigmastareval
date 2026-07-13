@@ -89,10 +89,6 @@ class replay_engine:
         order_library_size = len(data["all_clobs"])
         binance_lookups_size = len(data["all_prices"])
         #print(f"Order library size: {order_library_size}, Binance lookups size: {binance_lookups_size}")
-        if order_library_size != binance_lookups_size:
-            print(f"Warning: Order library size and Binance lookups size do not match. This may indicate a problem with the dataset. File: {filename}")
-            return None
-        
         outcomes = json.loads(data["metadata_end"][0]["markets"][0]["outcomes"])
         clobTokenIds = json.loads(data["metadata_end"][0]["markets"][0]["clobTokenIds"])
         if len(outcomes) != 2:
@@ -122,14 +118,49 @@ class replay_engine:
         holdings_history = []
         cash_history = []
         timestamps = []
+        for i in range(len(data["all_prices"])):
+            if data["all_prices"][i] is not None:
+                data["all_prices"][i]["timestamp"] = int(data["all_prices"][i]["timestamp"] * 1000)
+
         for asset_id in clobTokenIds:
             mid_prices[asset_id] = []
+        crypto_index = 0
+        crypto_never_set = True
         for i in range(order_library_size):
-            if data["all_clobs"][i] is None or data["all_prices"][i] is None:
+            if i == 0:
+                self.bot.first_run_setup()
+            if data["all_clobs"][i] is None:
                 print(f"Warning: Missing data at index {i}. Skipping this datapoint. File: {filename}")
                 continue
             self.data_provider.set_order_book(data["all_clobs"][i])
-            self.data_provider.set_crypto_value(data["all_prices"][i])
+            order_book_timestamp = None
+            if data["all_clobs"][i][0][1] is not None:
+                order_book_timestamp = data["all_clobs"][i][0][1]["timestamp"]
+            if data["all_clobs"][i][1][1] is not None:
+                if order_book_timestamp is not None:
+                    order_book_timestamp = max(order_book_timestamp, data["all_clobs"][i][1][1]["timestamp"])
+                else:
+                    order_book_timestamp = data["all_clobs"][i][1][1]["timestamp"]
+            if order_book_timestamp is None:
+                print(f"Warning: Missing order book timestamp at index {i}. Skipping this datapoint. File: {filename}")
+                continue
+            while crypto_index < len(data["all_prices"]):
+                
+                if data["all_prices"][crypto_index] is None:
+                    crypto_index += 1
+                    continue
+
+                crypto_value_timestamp = data["all_prices"][crypto_index]["timestamp"]
+                
+                if crypto_value_timestamp > int(order_book_timestamp):
+                    break
+                else:
+                    self.data_provider.set_crypto_value(data["all_prices"][crypto_index])
+                    crypto_never_set = False
+                    crypto_index += 1
+            
+            if crypto_never_set:
+                continue
             order_book = self.data_provider.get_order_book()
             skip = 0
             for asset in order_book:
@@ -151,8 +182,7 @@ class replay_engine:
                 else:
                     print(f"Warning: Mid price is None for asset {asset_id} at index {i}. File: {filename}")
             crypto_prices.append(data["all_prices"][i])
-            if i == 0:
-                self.bot.first_run_setup()
+
             self.bot.run()
             self.market.process_orders()
             current_timestamp = self.data_provider.get_current_timestamp()

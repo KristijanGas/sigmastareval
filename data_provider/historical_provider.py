@@ -29,7 +29,10 @@ class historical_provider:
         return self.down_token_id
 
     def get_current_timestamp(self):
-        return max(int(self.crypto_value["timestamp"]), int(self.order_book[0][1]["timestamp"]))
+        #if int(self.order_book[0][1]["timestamp"]) < int(self.crypto_value["timestamp"]):
+        #    print(f"Warning: Order book timestamp {self.order_book[0][1]['timestamp']} is less than crypto value timestamp {self.crypto_value['timestamp']}.")
+        # timestamps recorded from polymarket do NOT have to go in order
+        return int(self.order_book[0][1]["timestamp"])
     
     def get_end_timestamp(self):
         return self.end_timestamp
@@ -206,8 +209,6 @@ class historical_provider:
 
     def set_crypto_value(self, crypto_value):
         self.crypto_value = crypto_value
-        # current data is stored in seconds with 6 decimal places, convert directly to int with miliseconds
-        self.crypto_value["timestamp"] = int(self.crypto_value["timestamp"] * 1000)
 
     def set_end_timestamp(self, end_date):
         dt = datetime.strptime(end_date, "%Y-%m-%dT%H:%M:%SZ")
