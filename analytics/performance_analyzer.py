@@ -157,7 +157,8 @@ class PerformanceAnalyzer:
 
             if all(shares == 0 for shares in holdings_history[i]["holdings"].values()):
                 idle_time += duration
-        
+        if len(self.data["timestamps"]) < 1:
+            return 1.0
         total_time = self.data["timestamps"][-1] - self.data["timestamps"][0]
         idle_fraction = idle_time / total_time
         return idle_fraction

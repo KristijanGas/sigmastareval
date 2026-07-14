@@ -36,7 +36,8 @@ class KStrategy(masterbot):
         self.lookahead_time = 0
         self.trend_alpha = 1
         self.edge_treshold = 0.05
-        self.crypto_price_stdev = {"bitcoin-up-or-down": 320, "ethereum-up-or-down": 10.4, "solana-up-or-down": 0.65, "xrp-up-or-down": 0.007}  # Example values for standard deviation of crypto prices
+        self.crypto_price_stdev = {"bitcoin-up-or-down": 320, "ethereum-up-or-down": 10.4, "solana-up-or-down": 0.65, "xrp-up-or-down": 0.007,
+                                   "btc-updown-5m": 10, "eth-updown-5m": 10.4}  # Example values for standard deviation of crypto prices
 
     def first_run_setup(self):
         super().first_run_setup()
