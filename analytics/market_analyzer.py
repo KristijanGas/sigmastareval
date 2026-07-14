@@ -44,7 +44,29 @@ class MarketAnalyzer:
         print(str(count) + " out of " + str(total)+ " markets had both prices <= " + str(x))
         print("Percentage: " + str(count / total))
 
+    def stdev_from_pricetobeat(self):
+        stdevs = {}
+        for gz_file in self.dataset_path.rglob("*.gz"):
+            with gzip.open(gz_file, "rt", encoding="utf-8") as f:
+                data = json.load(f)
+                try: 
+                    price_to_beat = data["metadata_end"][0]["eventMetadata"]["priceToBeat"]
+                except KeyError:
+                    print(f"Warning: 'priceToBeat' not found in metadata_end for file {gz_file}. Skipping this file.")
+                    continue
+                for price in data["all_prices"]:
+                    if price is not None:
+                        stdev = abs(float(price["price"]) - price_to_beat)
+                        if gz_file.name not in stdevs:
+                            stdevs[gz_file.name] = []
+                        stdevs[gz_file.name].append(stdev)
+        for filename, stdev_list in stdevs.items():
+            if stdev_list:
+                average_stdev = sum(stdev_list) / len(stdev_list)
+                print(f"Average standard deviation from priceToBeat for {filename}: {average_stdev}")
+            else:
+                print(f"No valid prices found for {filename} to calculate standard deviation.")
 # run example: python analytics/market_analyzer.py datasets/bitcoin-up-or-down/
 path = Path(sys.argv[1])
 market_analyzer = MarketAnalyzer(path)
-market_analyzer.analyze()
+market_analyzer.stdev_from_pricetobeat()

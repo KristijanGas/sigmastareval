@@ -55,6 +55,10 @@ class replay_engine:
             base_name = "solana-up-or-down"
         elif filename_string[:14] == "xrp-up-or-down":
             base_name = "xrp-up-or-down"
+        elif filename_string[:13] == "btc-updown-5m":
+            base_name = "btc-updown-5m"
+        elif filename_string[:13] == "eth-updown-5m":
+            base_name = "eth-updown-5m"
         else:
             print(f"Warning: Unrecognized market type in filename {filename}. This may indicate a problem with the dataset.")
             return False
@@ -155,6 +159,7 @@ class replay_engine:
                 if crypto_value_timestamp > int(order_book_timestamp):
                     break
                 else:
+                    crypto_prices.append(data["all_prices"][crypto_index])
                     self.data_provider.set_crypto_value(data["all_prices"][crypto_index])
                     crypto_never_set = False
                     crypto_index += 1
@@ -181,7 +186,6 @@ class replay_engine:
                     mid_prices[asset_id].append({"mid_price": mid_price, "timestamp": current_timestamp})
                 else:
                     print(f"Warning: Mid price is None for asset {asset_id} at index {i}. File: {filename}")
-            crypto_prices.append(data["all_prices"][i])
 
             self.bot.run()
             self.market.process_orders()
