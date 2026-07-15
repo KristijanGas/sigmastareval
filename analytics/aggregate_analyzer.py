@@ -317,11 +317,11 @@ class AggregateAnalyzer:
         extreme_text = (
             "Extreme Cases\n"
             "──────────────────────────────\n"
-            f"Best ROI:          {round(self.max_roi(),2)}%\n"
-            f"Worst ROI:         {round(self.min_roi(),2)}%\n"
+            f"Best ROI:          {round(self.max_roi()*100,2)}%\n"
+            f"Worst ROI:         {round(self.min_roi()*100,2)}%\n"
             f"Largest Profit:    {round(self.max_pnl(),2)}\n"
             f"Largest Loss:      {round(self.min_pnl(),2)}\n"
-            f"Highest Drawdown:  {round(self.worst_drawdown(),2)}%\n"
+            f"Highest Drawdown:  {round(self.worst_drawdown()*100,2)}%\n"
         )
 
         ax_extreme = fig.add_subplot(gs[1, 1])

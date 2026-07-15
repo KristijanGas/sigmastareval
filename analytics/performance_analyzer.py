@@ -184,7 +184,7 @@ class PerformanceAnalyzer:
     
     def trade_count(self):
         if not self.closed_trades:
-            return None
+            return 0
 
         return len(self.closed_trades)
     
