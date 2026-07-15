@@ -31,11 +31,11 @@ class KStrategy(masterbot):
         self.past_trends_windowsize = 20000
 
         #parameters
-        self.time_volatility_alpha = 1000
-        self.investment_cash_percent = 0.1
+        self.time_volatility_alpha = 1050
+        self.investment_cash_percent = 0.4
         self.lookahead_time = 0
         self.trend_alpha = 1
-        self.edge_treshold = 0.05
+        self.edge_treshold = 0.04
         self.crypto_price_stdev = {"bitcoin-up-or-down": 320, "ethereum-up-or-down": 10.4, "solana-up-or-down": 0.65, "xrp-up-or-down": 0.007,
                                    "btc-updown-5m": 10, "eth-updown-5m": 10.4}  # Example values for standard deviation of crypto prices
 
@@ -119,7 +119,8 @@ class KStrategy(masterbot):
 
         time_remaining = (self.data_provider.get_end_timestamp() -current_timestamp) / 1000.0
         time_factor = (1 - (self.time_volatility_alpha / (time_remaining + self.time_volatility_alpha)))
-
+        predicted_trend = 0.0
+        '''
         predicted_trend = self.predictor.predict_trend(
             self.lookahead_time,
             current_timestamp, 
@@ -127,6 +128,8 @@ class KStrategy(masterbot):
             self.crypto_price_stdev[self.market.base_name],
             crypto_value
             )
+        '''
+        #print(predicted_trend)
         if time_factor == 0:
             time_factor = 0.0000001
         current_updown_value = (crypto_value - self.price_to_beat) / self.crypto_price_stdev.get(self.market.base_name)

@@ -1,4 +1,5 @@
 from pathlib import Path
+import random
 import subprocess
 import sys
 import time
@@ -20,6 +21,7 @@ partition_size = len(files) // process_count
 partition_remainder_size = len(files) - partition_size * process_count
 file_partitions = []
 added_extra = 0
+random.shuffle(files)  # Shuffle the files to ensure a more even distribution of workload across processes
 for i in range(0,process_count):
     add_list = []
     for j in range(partition_size):
