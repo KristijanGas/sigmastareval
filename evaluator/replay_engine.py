@@ -247,7 +247,7 @@ class replay_engine:
                     analytics_path.write_text(json.dumps(analytics, indent=2, default=_json_default), encoding="utf-8")
                     print(f"Saved analytics to {analytics_path}, final cash: {analytics['final_cash']}")
                     #outcomes.append((round(analytics["final_cash"], 2), analytics_path))
-
+                f.close()
         #for outcome, analytics_path in outcomes:
         #    print(f"Final cash outcome: {outcome}, analytics saved at: {analytics_path}")
         #print(f"Average final cash outcome for dataset {dataset_path}: {sum(cash for cash, _ in outcomes) / len(outcomes) if outcomes else 0}")

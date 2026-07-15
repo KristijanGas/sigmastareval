@@ -32,7 +32,7 @@ class historical_provider:
         #if int(self.order_book[0][1]["timestamp"]) < int(self.crypto_value["timestamp"]):
         #    print(f"Warning: Order book timestamp {self.order_book[0][1]['timestamp']} is less than crypto value timestamp {self.crypto_value['timestamp']}.")
         # timestamps recorded from polymarket do NOT have to go in order
-        return int(self.order_book[0][1]["timestamp"])
+        return max(int(self.order_book[0][1]["timestamp"]),int(self.order_book[1][1]["timestamp"]) )
     
     def get_end_timestamp(self):
         return self.end_timestamp

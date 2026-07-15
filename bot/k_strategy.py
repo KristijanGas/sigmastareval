@@ -32,7 +32,7 @@ class KStrategy(masterbot):
 
         #parameters
         self.time_volatility_alpha = 1000
-        self.investment_cash_percent = 0.2
+        self.investment_cash_percent = 0.1
         self.lookahead_time = 0
         self.trend_alpha = 1
         self.edge_treshold = 0.05
@@ -114,8 +114,8 @@ class KStrategy(masterbot):
         self.up_shares = self.market.get_user_holdings().get(self.up_token_id, 0)
         self.down_shares = self.market.get_user_holdings().get(self.down_token_id, 0)
         
-        up_price = self.data_provider.get_mid_price(self.up_token_id)
-        down_price = self.data_provider.get_mid_price(self.down_token_id)
+        self.up_price = self.data_provider.get_mid_price(self.up_token_id)
+        self.down_price = self.data_provider.get_mid_price(self.down_token_id)
 
         time_remaining = (self.data_provider.get_end_timestamp() -current_timestamp) / 1000.0
         time_factor = (1 - (self.time_volatility_alpha / (time_remaining + self.time_volatility_alpha)))
@@ -137,7 +137,7 @@ class KStrategy(masterbot):
                                               "up_prediction": projected_up_value,
                                               "down_prediction": projected_down_value})
         
-        edge = projected_up_value - up_price
+        edge = projected_up_value - self.up_price
         #desired_shares = (edge * 100)**2 * time_factor
         desired_shares = 20
         if edge > self.edge_treshold:

@@ -33,6 +33,8 @@ class masterbot(ABC):
             self.down_token_id = self.data_provider.get_down_token_id()
             self.first_run = False
             self.past_crypto_predictions = []
+            self.order_library = []
+
 
     @abstractmethod
     def run(self):
