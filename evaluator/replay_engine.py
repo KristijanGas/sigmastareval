@@ -93,8 +93,6 @@ class replay_engine:
         if not correctly_initialized:
             return None
         order_library_size = len(data["all_clobs"])
-        if order_library_size < 3500:
-            return None
         binance_lookups_size = len(data["all_prices"])
         #print(f"Order library size: {order_library_size}, Binance lookups size: {binance_lookups_size}")
         outcomes = json.loads(data["metadata_end"][0]["markets"][0]["outcomes"])

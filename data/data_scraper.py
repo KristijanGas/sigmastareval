@@ -170,9 +170,11 @@ def __main__():
         old_time_name = time_name
 
         market_metadata = data["metadata_start"]
-
-        clobs = get_clob_data(market_metadata)
-        data["all_clobs"].append(clobs)
+        try:
+            clobs = get_clob_data(market_metadata)
+            data["all_clobs"].append(clobs)
+        except Exception as e:
+            print(f"Error occurred while fetching CLOB data for {market}: {e}")
 
         ind += 1
         print(time_name, market_binance)
