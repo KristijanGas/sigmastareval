@@ -29,14 +29,18 @@ class KStrategy(masterbot):
         self.past_crypto_predictions = []
         self.past_weighted_trends = deque()
         self.past_trends_windowsize = 20000
+        self.trend_alpha = 1.0
+        self.first_different_estimate_timestamp = None
+        self.estimation_direction = 0
 
         #parameters
         self.time_volatility_alpha = 1050
-        self.investment_cash_percent = 0.4
+        self.correction_treshold = 0.04
+        self.correction_time_window = 10000
+        self.investment_cash_percent = 0.2
         self.lookahead_time = 0
-        self.trend_alpha = 1
         self.edge_treshold = 0.04
-        self.crypto_price_stdev = {"bitcoin-up-or-down": 320, "ethereum-up-or-down": 10.4, "solana-up-or-down": 0.65, "xrp-up-or-down": 0.007,
+        self.crypto_price_stdev = {"bitcoin-up-or-down": 320, "ethereum-up-or-down": 10.4, "solana-up-or-down": 0.6, "xrp-up-or-down": 0.0068,
                                    "btc-updown-5m": 10, "eth-updown-5m": 10.4}  # Example values for standard deviation of crypto prices
 
     def first_run_setup(self):
@@ -44,6 +48,7 @@ class KStrategy(masterbot):
         self.predictor = polynomial_predictor()
         self.past_weighted_trends.clear()
         self.predictor.price_to_beat = self.price_to_beat
+        self.trend_alpha = 1.0
     
     def place_order_with_cash_check(self, order_type, token_id, order_action, order_size, price, timeout):
         if order_size < 5:
@@ -103,11 +108,40 @@ class KStrategy(masterbot):
             price = order["price"]
             self.money_reserved_for_down += order_size * price
 
+    def update_estimation_alpha(self, current_timestamp, up_price, projected_up_value):
+        up_from_mid = abs(0.5 - up_price)
+        projected_up_from_mid = abs(0.5 - projected_up_value)
+        difference = projected_up_from_mid - up_from_mid
+
+        if abs(difference) > self.correction_treshold:
+            if difference > self.correction_treshold:
+                if self.estimation_direction != 1:
+                    self.first_different_estimate_timestamp = current_timestamp
+                self.estimation_direction = 1
+                
+            elif difference < -self.correction_treshold:
+                if self.estimation_direction != -1:
+                    self.first_different_estimate_timestamp = current_timestamp
+                self.estimation_direction = -1
+        else:
+            self.estimation_direction = 0
+            self.first_different_estimate_timestamp = None
+        
+        if self.first_different_estimate_timestamp is not None and (current_timestamp - self.first_different_estimate_timestamp) > self.correction_time_window:
+            #print(f"Consistent estimation difference detected. Adjusting trend_alpha. Current trend_alpha: {self.trend_alpha}, Estimation direction: {self.estimation_direction}")
+            if self.estimation_direction == 1:
+                self.trend_alpha *= 1.1
+            elif self.estimation_direction == -1:
+                self.trend_alpha *= 0.9
+            #print(f"Updated trend_alpha to {self.trend_alpha} based on consistent estimation difference.")
+            self.trend_alpha = max(0.1, min(self.trend_alpha, 10.0))
+            self.first_different_estimate_timestamp = current_timestamp
 
     def run(self):
         order_book = self.data_provider.get_order_book()
         self.order_library.append(order_book)
         self.update_cash_reservations()
+        
         crypto_value = self.data_provider.get_crypto_value()
         current_timestamp = self.data_provider.get_current_timestamp()
         self.predictor.update_past_crypto_values(crypto_value, current_timestamp, self.data_provider.get_end_timestamp())
@@ -130,9 +164,9 @@ class KStrategy(masterbot):
             )
         '''
         #print(predicted_trend)
-        if time_factor == 0:
-            time_factor = 0.0000001
-        current_updown_value = (crypto_value - self.price_to_beat) / self.crypto_price_stdev.get(self.market.base_name)
+        if time_factor < 0.01:
+            time_factor = 0.01
+        current_updown_value = (crypto_value - self.price_to_beat) / (self.crypto_price_stdev.get(self.market.base_name) * self.trend_alpha)
         current_updown_value /= (time_factor)**2
         projected_up_value = 0.5 * (1 + erf((predicted_trend + current_updown_value) / sqrt(2)))
         projected_down_value = 1 - projected_up_value
@@ -141,9 +175,10 @@ class KStrategy(masterbot):
                                               "down_prediction": projected_down_value})
         
         edge = projected_up_value - self.up_price
-        #desired_shares = (edge * 100)**2 * time_factor
+        #desired_shares = min((edge * 100)**2, 20)
         desired_shares = 20
         if edge > self.edge_treshold:
             self.manage_desired_inventory(desired_shares, 0, projected_up_value, projected_down_value)
         elif edge < -self.edge_treshold:
             self.manage_desired_inventory(0, desired_shares, projected_up_value, projected_down_value)
+        self.update_estimation_alpha(current_timestamp, self.up_price, projected_up_value)

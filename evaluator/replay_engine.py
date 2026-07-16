@@ -9,6 +9,8 @@ from importlib.util import module_from_spec, spec_from_file_location
 import json
 import threading
 
+from utils.utils import sort_paths_chronologically
+
 
 
 if __package__ is None or __package__ == "":
@@ -91,6 +93,8 @@ class replay_engine:
         if not correctly_initialized:
             return None
         order_library_size = len(data["all_clobs"])
+        if order_library_size < 3500:
+            return None
         binance_lookups_size = len(data["all_prices"])
         #print(f"Order library size: {order_library_size}, Binance lookups size: {binance_lookups_size}")
         outcomes = json.loads(data["metadata_end"][0]["markets"][0]["outcomes"])
@@ -236,6 +240,7 @@ class replay_engine:
     def evaluate_dataset(self, dataset_path: list[Path]):
 
         starting_cash = 100
+        dataset_path = sort_paths_chronologically(dataset_path)
         for gz_file in dataset_path:
             with gzip.open(gz_file, "rt", encoding="utf-8") as f:
                 data = json.load(f)
