@@ -3,6 +3,7 @@ import sys
 import time
 import urllib.request
 import urllib.parse
+from pathlib import Path
 import json
 from websocket import WebSocketApp
 from data_interface import parse_time_name_5m, parse_time_name_hourly
@@ -11,6 +12,16 @@ from zoneinfo import ZoneInfo
 import gzip
 import threading
 
+
+if __package__ is None or __package__ == "":
+    repo_root = Path(__file__).resolve().parents[1]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+from data_provider.binance_price_feed import BinancePriceFeed
 
 #markets = ["bitcoin-up-or-down"]
 #https://gamma-api.polymarket.com/events?slug=bitcoin-up-or-down-june-30-2026-2pm-et
@@ -67,61 +78,6 @@ def get_clob_data(market_metadata):
         clobs.append((token_id,market_data))
     return clobs
 
-
-
-class BinancePriceFeed:
-    def __init__(self, symbol: str):
-        self.symbol = symbol.upper()
-
-        self._lock = threading.Lock()
-        self._buffer = []
-
-    def _on_message(self, ws, message):
-        data = json.loads(message)
-
-        price = (float(data["b"]) + float(data["a"])) / 2
-
-        tick = {
-            "symbol": self.symbol,
-            "price": price,
-            "timestamp": datetime.now(ZoneInfo("America/New_York")).timestamp()
-        }
-        
-        with self._lock:
-            if len(self._buffer) == 0 or price != self._buffer[-1]["price"]:
-                self._buffer.append(tick)
-
-    def start(self):
-        url = (
-            f"wss://stream.binance.com:9443/ws/"
-            f"{self.symbol.lower()}@bookTicker"
-        )
-
-        self.ws = WebSocketApp(
-            url,
-            on_message=self._on_message,
-        )
-        thread = threading.Thread(
-            target=self._run,
-            daemon=True,
-        )
-        thread.start()
-
-    def consume(self):
-        with self._lock:
-            data = self._buffer
-            self._buffer = []
-        return data
-    
-    def _run(self):
-        while True:
-            try:
-                self.ws.run_forever()
-            except Exception as e:
-                print(f"Websocket error: {e}")
-
-            print("Disconnected. Reconnecting in 3 seconds...")
-            time.sleep(3)
 
 def store_data(data, time_name,market):
 

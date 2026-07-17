@@ -308,7 +308,7 @@ def main():
     if len(sys.argv) < 3:
         print(
             "Usage:\n"
-            "python evaluator.py bots.my_bot.MyBot datafile1 datafile 2 ..."
+            "python replay_engine.py bots.my_bot.MyBot datafile1 datafile 2 ..."
         )
         sys.exit(1)
 

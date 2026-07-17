@@ -40,7 +40,7 @@ class KStrategy(masterbot):
         self.investment_cash_percent = 0.2
         self.lookahead_time = 0
         self.edge_treshold = 0.04
-        self.crypto_price_stdev = {"bitcoin-up-or-down": 320, "ethereum-up-or-down": 10.4, "solana-up-or-down": 0.6, "xrp-up-or-down": 0.0068,
+        self.crypto_price_stdev = {"bitcoin-up-or-down": 300, "ethereum-up-or-down": 10.4, "solana-up-or-down": 0.6, "xrp-up-or-down": 0.0068,
                                    "btc-updown-5m": 10, "eth-updown-5m": 10.4}  # Example values for standard deviation of crypto prices
 
     def first_run_setup(self):
@@ -84,10 +84,12 @@ class KStrategy(masterbot):
         dif_down_shares = wanted_down_shares - self.down_shares
         if dif_up_shares > 0:
             dif_up_shares = min(dif_up_shares, self.data_provider.can_buy_with(self.up_token_id, self.get_usable_cash()))
-            self.place_order_with_cash_check(OrderType.GTD, self.up_token_id, OrderAction.BID, dif_up_shares, projected_up_value, timeout=1000)
+            up_ask_price = self.data_provider.get_best_ask(self.up_token_id)
+            self.place_order_with_cash_check(OrderType.GTD, self.up_token_id, OrderAction.BID, dif_up_shares, up_ask_price + 0.02, timeout=1000)
         if dif_down_shares > 0:
             dif_down_shares = min(dif_down_shares, self.data_provider.can_buy_with(self.down_token_id, self.get_usable_cash()))
-            self.place_order_with_cash_check(OrderType.GTD, self.down_token_id, OrderAction.BID, dif_down_shares, projected_down_value, timeout=1000)
+            down_ask_price = self.data_provider.get_best_ask(self.down_token_id)
+            self.place_order_with_cash_check(OrderType.GTD, self.down_token_id, OrderAction.BID, dif_down_shares, down_ask_price + 0.02, timeout=1000)
         if dif_up_shares < 0:
             self.place_order_with_cash_check(OrderType.GTD, self.up_token_id, OrderAction.ASK, -dif_up_shares, max(projected_up_value,0.01), timeout=1000)
         if dif_down_shares < 0:
@@ -175,8 +177,8 @@ class KStrategy(masterbot):
                                               "down_prediction": projected_down_value})
         
         edge = projected_up_value - self.up_price
-        #desired_shares = min((edge * 100)**2, 20)
-        desired_shares = 20
+        desired_shares = self.data_provider.can_buy_with(self.up_token_id, self.get_usable_cash() / 2)
+        #desired_shares = min(desired_shares, 20)
         if edge > self.edge_treshold:
             self.manage_desired_inventory(desired_shares, 0, projected_up_value, projected_down_value)
         elif edge < -self.edge_treshold:
