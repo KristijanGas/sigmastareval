@@ -49,4 +49,4 @@ class OrderBookFeed:
 
             if found == 0:
                 with self._lock:
-                    self.order_book.append((self.asset_id, order_book_for_asset))
+                    self.order_book.append([self.asset_id, order_book_for_asset])

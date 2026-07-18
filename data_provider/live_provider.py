@@ -45,7 +45,7 @@ class live_provider(historical_provider):
 
     def run(self):
         while True:
-            try:
+            #try:
                 if self.market_type == "hourly":
                     time_name = parse_time_name_hourly()["hourly_name"]
                 elif self.market_type == "5m":
@@ -69,9 +69,9 @@ class live_provider(historical_provider):
 
                 #time.sleep(0.1)  # Sleep for a second before the next iteration
                 #print(self.get_best_bid(self.up_token_id), self.get_best_bid(self.down_token_id), self.get_best_ask(self.up_token_id), self.get_best_ask(self.down_token_id), self.get_crypto_value(), self.get_price_to_beat(), self.get_current_timestamp(), self.get_end_timestamp())
-            except Exception as e:
-                print(f"Error in live_provider run loop: {e}")
-                time.sleep(1)
+            #except Exception as e:
+            #    print(f"Error in live_provider run loop: {e}")
+            #    time.sleep(1)
 
     def get_metadata(self, time_name, market_slug_base):
         
@@ -116,19 +116,30 @@ class live_provider(historical_provider):
             
         self.up_feed = OrderBookFeed(self.up_token_id, self.order_book)
         self.down_feed = OrderBookFeed(self.down_token_id, self.order_book)
-        print(f"Set market with Up token ID: {self.up_token_id}, Down token ID: {self.down_token_id}, End timestamp: {self.end_timestamp}")
+        
         # start threads
         self.up_thread = threading.Thread(target=self.up_feed.run, daemon=True)
         self.down_thread = threading.Thread(target=self.down_feed.run, daemon=True)
         self.up_thread.start()
         self.down_thread.start()
-        
+        while self.order_book is None or len(self.order_book) < 2:
+            time.sleep(0.1)
+        for j in range(len(self.order_book)):
+            print(self.order_book[j][1][1]["min_order_size"])
+            self.market.set_min_order_size(self.order_book[j][0], self.order_book[j][1][1]["min_order_size"])
+        print(f"Set market with Up token ID: {self.up_token_id}, Down token ID: {self.down_token_id}, End timestamp: {self.end_timestamp}")
 
     def get_current_timestamp(self):
         current_time = datetime.now(ZoneInfo("America/New_York"))
         current_time = int(current_time.timestamp() * 1000)
         return current_time
     
+    def get_outcomes(self):
+        if self.metadata is not None:
+            return json.loads(self.metadata[0]["markets"][0]["outcomes"])
+        else:
+            return None
+
     def get_end_timestamp(self):
         return self.end_timestamp
     

@@ -41,7 +41,7 @@ class market_simulator:
             raise ValueError(f"Price must be positive: {price}")
         if order_type == OrderType.GTD and timeout <= self.data_provider.get_current_timestamp():
             raise ValueError(f"GTD order timeout must be in the future: {timeout}")
-        if order_size < float(self.min_order_size[asset_id]):
+        if order_size < float(self.min_order_size.get(asset_id, 5)):
             raise ValueError(f"Order size must be greater than or equal to the minimum order size: {self.set_min_order_size}")
         
         self.order_id_counter += 1

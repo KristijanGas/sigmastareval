@@ -60,7 +60,7 @@ def parse_time_name_hourly():
 
     split3 = time.split("-")
     hour, minute, secondandmilisecond = split3[0].split(":")
-    second, milisecond = secondandmilisecond.split(".")
+    #second, milisecond = secondandmilisecond.split(".")
 
     hourampm = map_hours[int(hour)]
     ret = {

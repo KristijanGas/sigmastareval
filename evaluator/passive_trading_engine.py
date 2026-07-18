@@ -38,8 +38,8 @@ class PassiveTradingEngine:
         while True:
             if hasattr(self.live_provider, 'metadata') and self.live_provider.metadata is not None:
                 break
-        self.market.live_provider = self.live_provider
-        self.market_thread = threading.Thread(target=self.market.run, daemon=True)
+        self.market.data_provider = self.live_provider
+        self.market_thread = threading.Thread(target=self.market.run, args=(self.market_type,), daemon=True)
         self.market_thread.start()
     
     def run_bot(self):
