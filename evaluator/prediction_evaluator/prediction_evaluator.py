@@ -1,5 +1,6 @@
 
-from predictors import LinearPredictor
+#from predictors import MultiWindowMomentumPredictor, RegressionMomentumPredictor, MultiWindowRegressionPredictor
+
 from prediction_eval_dataclasses import MarketSnapshot, PredictionObservation, MarketAssets
 from future_target_matcher import FutureTargetMatcher
 from snapshot_builder import SnapshotBuilder
@@ -10,6 +11,17 @@ import json
 import sys
 import gzip
 
+if __package__ is None or __package__ == "":
+    repo_root = Path(__file__).resolve().parents[2]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+from bot.prediction_models.linear_predictor import LinearPredictor
+from bot.prediction_models.multi_window_linear_predictor import MultiWindowLinearPredictor
+from bot.prediction_models.linear_regression_predictor import LinearRegressionPredictor
+from bot.prediction_models.multi_window_regression_predictor import MultiWindowRegressionPredictor
 
 class PredictionEvaluator:
     def __init__(self, predictor, target_matcher: FutureTargetMatcher):
@@ -34,28 +46,7 @@ class PredictionEvaluator:
         return observations
 
 
-    def prepare_market_snapshots(self, data):
-        metadata_start = data["metadata_start"]
-        all_clobs = data["all_clobs"]
-        all_prices = data["all_prices"]
-        metadata_end = data["metadata_end"]
-        assets = extract_market_assets(metadata_start)
 
-        event = metadata_start[0]
-        markets = event.get("markets")
-        market = markets[0]
-
-        market_end_timestamp = iso_to_timestamp_ms(market.get("endDate"))
-        price_to_beat = extract_price_to_beat(metadata_end)
-
-        builder = SnapshotBuilder(
-            up_asset_id=assets.up_asset_id,
-            down_asset_id=assets.down_asset_id,
-            market_end_timestamp=market_end_timestamp,
-            price_to_beat=price_to_beat,
-        )
-
-        return builder.build(raw_clobs=all_clobs, raw_prices=all_prices)
 
 
 
@@ -225,11 +216,83 @@ def plot_prediction_accuracy(observations):
     plt.tight_layout()
     plt.show()
 
-def main():
+def prepare_market_snapshots(data):
+    metadata_start = data["metadata_start"]
+    all_clobs = data["all_clobs"]
+    all_prices = data["all_prices"]
+    metadata_end = data["metadata_end"]
+    assets = extract_market_assets(metadata_start)
 
-    predictor_path = sys.argv[1]
-    dataset_paths = sys.argv[2:]
+    event = metadata_start[0]
+    markets = event.get("markets")
+    market = markets[0]
 
+    market_end_timestamp = iso_to_timestamp_ms(market.get("endDate"))
+    price_to_beat = extract_price_to_beat(metadata_end)
+
+    builder = SnapshotBuilder(
+        up_asset_id=assets.up_asset_id,
+        down_asset_id=assets.down_asset_id,
+        market_end_timestamp=market_end_timestamp,
+        price_to_beat=price_to_beat,
+    )
+
+    return builder.build(raw_clobs=all_clobs, raw_prices=all_prices)
+
+
+def generate_test_and_train_data(dataset_paths):
+    train_snapshots = []
+    test_paths = []
+    count = 0
+    for dataset in dataset_paths:
+        for data_file in Path(dataset).glob("*.gz"):
+            if count % 2 == 0:
+                test_paths.append(data_file)
+                count += 1
+            else:
+                file = data_file.resolve()
+                with gzip.open(file, "rt", encoding="utf-8") as f:
+                    data = json.load(f)
+                    market_snapshots = prepare_market_snapshots(data)
+                    train_snapshots.append(market_snapshots)
+                    count += 1
+    return test_paths, train_snapshots
+
+def start_training_and_evaluation(training_dataset, test_paths):
+    for data_file in test_paths:
+        print(f"Found data file: {data_file}")
+        file = data_file.resolve()
+        with gzip.open(file, "rt", encoding="utf-8") as f:
+            data = json.load(f)
+
+            #predictor = LinearPredictor()
+            predictor = MultiWindowRegressionPredictor(training_dataset)
+            target_matcher = FutureTargetMatcher()
+            evaluator = PredictionEvaluator(
+                predictor=predictor,
+                target_matcher=target_matcher
+            )
+            market_snapshots = prepare_market_snapshots(data)
+
+            observations = evaluator.evaluate_market(market_snapshots)
+
+            print("Observations:", len(observations))
+            print("MAE:", mae(observations))
+
+            # for i in range(5):
+            #     observation = observations[i]
+            #     print(
+            #         f"Prediction at {observation.prediction_timestamp}: "
+            #         f"current={observation.current_midpoint:.4f}, "
+            #         f"predicted={observation.predicted_midpoint:.4f}, "
+            #         f"actual={observation.actual_midpoint:.4f}, "
+            #         f"actual timestamp={observation.actual_timestamp}, "
+            #     )
+    plot_prediction_observations(observations)
+    plot_prediction_accuracy(observations)
+
+
+def start_evaluation(dataset_paths):
     files = []
     for dataset in dataset_paths:
         for data_file in Path(dataset).glob("*.gz"):
@@ -244,7 +307,7 @@ def main():
                     predictor=predictor,
                     target_matcher=target_matcher
                 )
-                market_snapshots = evaluator.prepare_market_snapshots(data)
+                market_snapshots = prepare_market_snapshots(data)
 
                 observations = evaluator.evaluate_market(market_snapshots)
 
@@ -252,16 +315,33 @@ def main():
                 print("MAE:", mae(observations))
 
 
-                for i in range(5):
-                    observation = observations[i]
-                    print(
-                        f"Prediction at {observation.prediction_timestamp}: "
-                        f"current={observation.current_midpoint:.4f}, "
-                        f"predicted={observation.predicted_midpoint:.4f}, "
-                        f"actual={observation.actual_midpoint:.4f}, "
-                        f"actual timestamp={observation.actual_timestamp}, "
-                    )
+                # for i in range(5):
+                #     observation = observations[i]
+                #     print(
+                #         f"Prediction at {observation.prediction_timestamp}: "
+                #         f"current={observation.current_midpoint:.4f}, "
+                #         f"predicted={observation.predicted_midpoint:.4f}, "
+                #         f"actual={observation.actual_midpoint:.4f}, "
+                #         f"actual timestamp={observation.actual_timestamp}, "
+                #     )
         plot_prediction_observations(observations)
         plot_prediction_accuracy(observations)
+
+
+def main():
+
+    predictor_path = sys.argv[1]
+    dataset_paths = sys.argv[2:]
+
+    training_required = True
+
+    if training_required:
+        test_paths, train_data = generate_test_and_train_data(dataset_paths)
+        start_training_and_evaluation(training_dataset=train_data, test_paths=test_paths)
+    else:
+        start_evaluation(dataset_paths=dataset_paths)
+
+    
+
 
 main()

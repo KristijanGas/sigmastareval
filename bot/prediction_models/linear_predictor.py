@@ -1,9 +1,7 @@
 from collections import deque
 from dataclasses import dataclass
-from prediction_eval_dataclasses import MarketSnapshot, PricePrediction
+from evaluator.prediction_evaluator.prediction_eval_dataclasses import MarketSnapshot, PricePrediction
 
-
-#temporary file - for testing only
 
 
 class LinearPredictor:
@@ -59,13 +57,14 @@ class LinearPredictor:
 
 
     def find_snapshot_at_or_before(self, target_timestamp):
+        candidate = None
         for snapshot in self.past_snapshots:
             if snapshot.timestamp <= target_timestamp:
                 candidate = snapshot
             else:
                 break
 
-            return candidate
+        return candidate
         
     # clears history before starting a new market
     def reset(self):
@@ -91,5 +90,7 @@ class LinearPredictor:
                 "Snapshots must be provided in strictly "
                 "increasing timestamp order"
             )
+    
+
 
     
