@@ -208,8 +208,9 @@ class replay_engine:
                 }
             )
             timestamps.append(current_timestamp)
-
-        resolution = self.market.resolve_market(self.eventMetadata,outcomes, clobTokenIds)
+        final_price = self.eventMetadata.get("finalPrice")
+        price_to_beat = self.eventMetadata.get("priceToBeat")
+        resolution = self.market.resolve_market(final_price, price_to_beat, outcomes, clobTokenIds)
         analytics = {
             "transactions" : self.market.transactions,
             "order_placements": self.market.order_placements,
@@ -217,7 +218,7 @@ class replay_engine:
             "cash_history": cash_history,
             "timestamps": timestamps,
             "asset_labels": asset_labels,
-            "price_to_beat": self.eventMetadata.get("priceToBeat"),
+            "price_to_beat": price_to_beat,
             "final_cash" : self.data_provider.get_user_cash(),
             "resolution" : resolution,
             "mid_prices" : mid_prices,

@@ -40,7 +40,8 @@ class live_provider(historical_provider):
         self.metadata = None
         self.up_token_id = None
         self.down_token_id = None
-        self.run()
+        self.token_ids = None
+        #self.run()
 
     def run(self):
         while True:
@@ -58,11 +59,13 @@ class live_provider(historical_provider):
                     self.metadata = None
                     self.up_token_id = None
                     self.down_token_id = None
+                    self.token_ids = None
                     self.set_market(time_name)
                 
                 self.metadata = self.get_metadata(time_name, self.market_slug_base)
-                if self.metadata[0]["eventMetadata"] is not None and self.metadata[0]["eventMetadata"]["priceToBeat"] is not None:
-                    self.set_price_to_beat(self.metadata[0]["eventMetadata"]["priceToBeat"])
+                if self.metadata[0].get("eventMetadata", None) is not None:
+                    if self.metadata[0]["eventMetadata"] is not None and self.metadata[0]["eventMetadata"]["priceToBeat"] is not None:
+                        self.set_price_to_beat(self.metadata[0]["eventMetadata"]["priceToBeat"])
 
                 #time.sleep(0.1)  # Sleep for a second before the next iteration
                 #print(self.get_best_bid(self.up_token_id), self.get_best_bid(self.down_token_id), self.get_best_ask(self.up_token_id), self.get_best_ask(self.down_token_id), self.get_crypto_value(), self.get_price_to_beat(), self.get_current_timestamp(), self.get_end_timestamp())

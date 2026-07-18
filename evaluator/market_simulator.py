@@ -227,9 +227,9 @@ class market_simulator:
 
         self.new_order.clear()
 
-    def resolve_market(self,eventMetadata,outcomes, clobTokenIds):
-        
-        if eventMetadata["finalPrice"] >= eventMetadata["priceToBeat"]:
+    def resolve_market(self, final_price, price_to_beat, outcomes, clobTokenIds):
+
+        if final_price >= price_to_beat:
             winning_asset = "Up"
         else:
             winning_asset = "Down"
@@ -242,6 +242,7 @@ class market_simulator:
         if self.user_holdings.get(winning_token_id, 0) > 0:
             self.current_cash += self.user_holdings[winning_token_id]
             self.user_holdings[winning_token_id] = 0
+        self.user_holdings = {}
         return winning_asset
         
         
