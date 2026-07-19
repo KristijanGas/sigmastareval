@@ -32,6 +32,13 @@ class passive_market_simulator(market_simulator):
     def run(self, market_type):
         print(f"Starting passive market simulator for {self.base_name} with starting cash: {self.current_cash}")
         while True:
+            if market_type == "hourly":
+                time_name = parse_time_name_hourly()["hourly_name"]
+            elif market_type == "5m":
+                time_name = parse_time_name_5m()
+            while self.data_provider.current_market_name is None or self.data_provider.current_market_name != f"{self.base_name}-{time_name}":
+                print("Waiting for live provider to set current market name...")
+                time.sleep(0.1)
             while self.price_to_beat is None:
                 self.price_to_beat = self.data_provider.get_price_to_beat()
                 print(f"Waiting for price to beat to be set. Current value: {self.price_to_beat}")

@@ -44,6 +44,7 @@ class live_provider(historical_provider):
         self.fair_value_up = None
         self.up_thread = None
         self.down_thread = None
+        self.current_market_name = None
         #self.run()
 
     def run(self):
@@ -147,6 +148,7 @@ class live_provider(historical_provider):
             if minsize is not None:
                 self.market.set_min_order_size(self.order_book[j][0], minsize)
         print(f"Set live provider with Up token ID: {self.up_token_id}, Down token ID: {self.down_token_id}, End timestamp: {self.end_timestamp}")
+        self.current_market_name = f"{self.market_slug_base}-{time_name}"
 
     def get_current_timestamp(self):
         current_time = datetime.now(ZoneInfo("America/New_York"))
