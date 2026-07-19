@@ -77,7 +77,8 @@ class live_provider(historical_provider):
                 try:
                     self.set_price_to_beat(self.metadata[0]["eventMetadata"]["priceToBeat"])
                 except Exception as e:
-                    print(f"Error setting price to beat: {e}")
+                    #print(f"Error setting price to beat: {e}")
+                    pass
                 #time.sleep(0.1)  # Sleep for a second before the next iteration
                 #print(self.get_best_bid(self.up_token_id), self.get_best_bid(self.down_token_id), self.get_best_ask(self.up_token_id), self.get_best_ask(self.down_token_id), self.get_crypto_value(), self.get_price_to_beat(), self.get_current_timestamp(), self.get_end_timestamp())
             #except Exception as e:
@@ -145,7 +146,7 @@ class live_provider(historical_provider):
                     minsize = 5
             if minsize is not None:
                 self.market.set_min_order_size(self.order_book[j][0], minsize)
-        print(f"Set market with Up token ID: {self.up_token_id}, Down token ID: {self.down_token_id}, End timestamp: {self.end_timestamp}")
+        print(f"Set live provider with Up token ID: {self.up_token_id}, Down token ID: {self.down_token_id}, End timestamp: {self.end_timestamp}")
 
     def get_current_timestamp(self):
         current_time = datetime.now(ZoneInfo("America/New_York"))

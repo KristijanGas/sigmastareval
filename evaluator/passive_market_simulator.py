@@ -2,7 +2,7 @@ import json
 import os
 from pathlib import Path
 import sys
-from time import time
+import time
 import gzip
 
 
@@ -30,27 +30,30 @@ class passive_market_simulator(market_simulator):
         self.cash_history = []
     
     def run(self, market_type):
+        print(f"Starting passive market simulator for {self.base_name} with starting cash: {self.current_cash}")
         while True:
             while self.price_to_beat is None:
                 self.price_to_beat = self.data_provider.get_price_to_beat()
+                print(f"Waiting for price to beat to be set. Current value: {self.price_to_beat}")
                 time.sleep(0.1)
             while self.clobTokenIds is None or self.outcomes is None:
                 self.clobTokenIds = self.data_provider.get_market_asset_ids()
                 self.outcomes = self.data_provider.get_outcomes()
+                print(f"Waiting for market asset IDs and outcomes to be set. Current values: {self.clobTokenIds}, {self.outcomes}")
                 time.sleep(0.1)
             print(f"Price to beat: {self.price_to_beat}, market initialized with starting cash: {self.current_cash}")
             print(f"Market asset IDs: {self.clobTokenIds}, Market outcomes: {self.outcomes}")
             while True:
+                time.sleep(0.1)
                 if market_type == "hourly":
                     time_name = parse_time_name_hourly()["hourly_name"]
                 elif market_type == "5m":
                     time_name = parse_time_name_5m()
                 if self.old_time_name is not None:
-                    self.clobTokenIds = self.data_provider.get_market_asset_ids()
-                    self.outcomes = self.data_provider.get_outcomes()
+                    #print(f"Time name: {time_name}, Old time name: {self.old_time_name}, Price to beat: {self.price_to_beat}, Outcomes: {self.outcomes}, CLOB Token IDs: {self.clobTokenIds}")
                     if time_name != self.old_time_name:
                         final_price = self.data_provider.get_crypto_value()
-                        print("Final price: ", final_price, self.price_to_beat, self.outcomes, self.clobTokenIds)
+                        print(f"Final price: {final_price}, Price to beat: {self.price_to_beat}, Outcomes: {self.outcomes}, CLOB Token IDs: {self.clobTokenIds}")
                         self.resolve_market(final_price, self.price_to_beat, self.outcomes, self.clobTokenIds)
                         self.price_to_beat = None
                         self.clobTokenIds = None
@@ -60,24 +63,25 @@ class passive_market_simulator(market_simulator):
                         self.holdings_history.clear()
                         self.old_time_name = time_name
                         break
-                time.sleep(0.1)
+                
                 self.holdings_history.append(
                     {
                         "timestamp" : self.data_provider.get_current_timestamp(),
-                        "holdings" : self.data_provider.get_holdings()
+                        "holdings" : self.data_provider.get_user_holdings()
                     }
                 )
                 self.cash_history.append(
                     {
                         "timestamp" : self.data_provider.get_current_timestamp(),
-                        "cash" : self.data_provider.get_cash()
+                        "cash" : self.data_provider.get_user_cash()
                     }
                 )
                 self.old_time_name = time_name
                 self.process_orders()
     
-    def store_analytics(self, analytics):
+    def store_analytics(self):
         # Store the cash and holdings history in the analytics dictionary
+        analytics = {}
         analytics["cash_history"] = self.cash_history
         analytics["holdings_history"] = self.holdings_history
         analytics["final_cash"] = self.current_cash
