@@ -43,6 +43,8 @@ class market_simulator:
             raise ValueError(f"GTD order timeout must be in the future: {timeout}")
         if order_size < float(self.min_order_size.get(asset_id, 5)):
             raise ValueError(f"Order size must be greater than or equal to the minimum order size: {self.set_min_order_size}")
+        if asset_id not in self.data_provider.get_market_asset_ids():
+            raise ValueError(f"Invalid asset ID: {asset_id}")
         
         self.order_id_counter += 1
         self.orders.append(

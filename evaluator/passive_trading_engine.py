@@ -40,6 +40,7 @@ class PassiveTradingEngine:
             if hasattr(self.live_provider, 'metadata') and self.live_provider.metadata is not None:
                 break
         self.market.data_provider = self.live_provider
+
         self.market_thread = threading.Thread(target=self.market.run, args=(self.market_type,), daemon=True)
         self.market_thread.start()
         self.bot_thread = threading.Thread(target=self.run_bot, daemon=True)
@@ -61,7 +62,8 @@ class PassiveTradingEngine:
             if self.old_time_name is None or time_name != self.old_time_name:
                 self.bot.first_run_setup()
                 self.old_time_name = time_name
-            self.bot.run()
+            if self.live_provider.current_market_name is not None and self.live_provider.current_market_name == f"{self.market_slug}-{time_name}":
+                self.bot.run()
             time.sleep(0.05)
             #print("cash: ", self.market.get_user_cash())
             #print("holdings: ", self.market.get_user_holdings())
