@@ -1,34 +1,25 @@
+import math
 import sys
 import time
 from collections import deque
 
 import pyqtgraph as pg
-from PyQt6.QtCore import QTimer
+from PyQt6.QtCore import QTimer, Qt
 from PyQt6.QtWidgets import QApplication
 
 
 class LiveDashboard:
 
     def __init__(self, data_provider, history=60000):
-
         self.data = data_provider
         self.history = history
 
-        self.times = deque(maxlen=history)
+        self.history_data = deque(maxlen=history)
 
-        self.crypto = deque(maxlen=history)
-
-        self.up = deque(maxlen=history)
-        self.down = deque(maxlen=history)
-
-        self.up_fair = deque(maxlen=history)
-        self.down_fair = deque(maxlen=history)
-
-        self.cash = deque(maxlen=history)
-        self.net = deque(maxlen=history)
-
-        self.up_shares = deque(maxlen=history)
-        self.down_shares = deque(maxlen=history)
+    def _f(self, value):
+        if value is None:
+            return math.nan
+        return float(value)
 
     def run(self):
 
@@ -36,39 +27,34 @@ class LiveDashboard:
         if app is None:
             app = QApplication(sys.argv)
 
-        win = pg.GraphicsLayoutWidget(
-            title="Trading Dashboard"
-        )
-        win.resize(1400, 900)
+        win = pg.GraphicsLayoutWidget(title="Trading Dashboard")
+        win.resize(1600, 900)
 
         #
         # Portfolio
         #
 
-        portfolio = win.addPlot(
-            title="Portfolio"
-        )
-
+        portfolio = win.addPlot(title="Portfolio")
         portfolio.showGrid(x=True, y=True)
         portfolio.addLegend()
 
         up_shares_curve = portfolio.plot(
-            pen='g',
+            pen=pg.mkPen('g', width=2),
             name="UP Shares"
         )
 
         down_shares_curve = portfolio.plot(
-            pen='r',
+            pen=pg.mkPen('r', width=2),
             name="DOWN Shares"
         )
 
         cash_curve = portfolio.plot(
-            pen='y',
+            pen=pg.mkPen('y', width=2),
             name="Cash"
         )
 
         net_curve = portfolio.plot(
-            pen='w',
+            pen=pg.mkPen('w', width=3),
             name="Net Worth"
         )
 
@@ -78,19 +64,19 @@ class LiveDashboard:
 
         win.nextRow()
 
-        crypto_plot = win.addPlot(
-            title="BTC - Price To Beat"
-        )
-
+        crypto_plot = win.addPlot(title="BTC - Strike")
         crypto_plot.showGrid(x=True, y=True)
 
         crypto_curve = crypto_plot.plot(
-            pen='c'
+            pen=pg.mkPen('c', width=2)
         )
 
         crypto_plot.addLine(
             y=0,
-            pen=pg.mkPen('w')
+            pen=pg.mkPen(
+                'w',
+                style=Qt.PenStyle.DashLine
+            )
         )
 
         #
@@ -99,9 +85,7 @@ class LiveDashboard:
 
         win.nextRow()
 
-        market = win.addPlot(
-            title="YES / NO Prices"
-        )
+        market = win.addPlot(title="Market vs Fair Value")
 
         market.showGrid(x=True, y=True)
         market.setYRange(0, 1)
@@ -109,23 +93,31 @@ class LiveDashboard:
         market.addLegend()
 
         up_curve = market.plot(
-            pen='g',
+            pen=pg.mkPen('g', width=2),
             name="UP"
         )
 
         down_curve = market.plot(
-            pen='r',
+            pen=pg.mkPen('r', width=2),
             name="DOWN"
         )
 
         up_fair_curve = market.plot(
-            pen=pg.mkPen('g', style=pg.QtCore.Qt.PenStyle.DashLine),
-            name="UP Fair Value"
+            pen=pg.mkPen(
+                'g',
+                width=2,
+                style=Qt.PenStyle.DashLine
+            ),
+            name="UP Fair"
         )
 
         down_fair_curve = market.plot(
-            pen=pg.mkPen('r', style=pg.QtCore.Qt.PenStyle.DashLine),
-            name="DOWN Fair Value"
+            pen=pg.mkPen(
+                'r',
+                width=2,
+                style=Qt.PenStyle.DashLine
+            ),
+            name="DOWN Fair"
         )
 
         timer = QTimer()
@@ -144,8 +136,8 @@ class LiveDashboard:
                 up_price = self.data.get_best_bid(asset_ids[0])
                 down_price = self.data.get_best_bid(asset_ids[1])
 
-                up_fair_value = self.data.get_fair_value_up()
-                down_fair_value = self.data.get_fair_value_down()
+                up_fair = self.data.get_fair_value_up()
+                down_fair = self.data.get_fair_value_down()
 
                 cash = self.data.get_user_cash()
 
@@ -156,91 +148,98 @@ class LiveDashboard:
 
                 net = (
                     cash
-                    + up_shares * up_price
-                    + down_shares * down_price
+                    + (0 if up_price is None else up_shares * up_price)
+                    + (0 if down_price is None else down_shares * down_price)
                 )
 
-                self.times.append(now)
+                self.history_data.append({
 
-                self.crypto.append(
-                    0 if strike is None else crypto - strike
-                )
-                if up_price is not None:
-                    self.up.append(up_price)
-                if down_price is not None:
-                    self.down.append(down_price)
+                    "time": now,
 
-                self.cash.append(cash)
-                self.net.append(net)
+                    "crypto":
+                        math.nan if strike is None
+                        else crypto - strike,
 
-                self.up_shares.append(up_shares)
-                self.down_shares.append(down_shares)
-                if up_fair_value is not None and down_fair_value is not None:
-                    self.up_fair.append(up_fair_value)
-                    self.down_fair.append(down_fair_value)
+                    "up":
+                        self._f(up_price),
+
+                    "down":
+                        self._f(down_price),
+
+                    "up_fair":
+                        self._f(up_fair),
+
+                    "down_fair":
+                        self._f(down_fair),
+
+                    "cash":
+                        cash,
+
+                    "net":
+                        net,
+
+                    "up_shares":
+                        up_shares,
+
+                    "down_shares":
+                        down_shares,
+                })
+
+                if len(self.history_data) < 2:
+                    return
+
+                t0 = self.history_data[0]["time"]
+
+                x = [
+                    p["time"] - t0
+                    for p in self.history_data
+                ]
+
+                up = [p["up"] for p in self.history_data]
+                down = [p["down"] for p in self.history_data]
+
+                up_fair = [p["up_fair"] for p in self.history_data]
+                down_fair = [p["down_fair"] for p in self.history_data]
+
+                crypto = [p["crypto"] for p in self.history_data]
+
+                cash = [p["cash"] for p in self.history_data]
+                net = [p["net"] for p in self.history_data]
+
+                up_shares = [p["up_shares"] for p in self.history_data]
+                down_shares = [p["down_shares"] for p in self.history_data]
 
                 #
-                # x axis
+                # Portfolio
                 #
 
-                x = [t - self.times[0] for t in self.times]
+                up_shares_curve.setData(x, up_shares)
+                down_shares_curve.setData(x, down_shares)
+
+                cash_curve.setData(x, cash)
+                net_curve.setData(x, net)
 
                 #
-                # update plots
+                # Crypto
                 #
 
-                up_shares_curve.setData(
-                    x,
-                    list(self.up_shares)
-                )
+                crypto_curve.setData(x, crypto)
 
-                down_shares_curve.setData(
-                    x,
-                    list(self.down_shares)
-                )
+                #
+                # Market
+                #
 
-                cash_curve.setData(
-                    x,
-                    list(self.cash)
-                )
+                up_curve.setData(x, up)
+                down_curve.setData(x, down)
 
-                net_curve.setData(
-                    x,
-                    list(self.net)
-                )
-
-                crypto_curve.setData(
-                    x,
-                    list(self.crypto)
-                )
-
-                up_curve.setData(
-                    x,
-                    list(self.up)
-                )
-
-                down_curve.setData(
-                    x,
-                    list(self.down)
-                )
-
-                up_fair_curve.setData(
-                    x,
-                    list(self.up_fair)
-                )
-
-                down_fair_curve.setData(
-                    x,
-                    list(self.down_fair)
-                )
+                up_fair_curve.setData(x, up_fair)
+                down_fair_curve.setData(x, down_fair)
 
             except Exception as e:
                 print(e)
 
         timer.timeout.connect(update)
-
         timer.start(100)
 
         win.show()
-
         app.exec()
