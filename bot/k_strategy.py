@@ -3,6 +3,7 @@ from collections import deque
 
 from math import erf, sqrt
 import numpy as np
+import time
 
 from bot.order_actions import OrderAction
 from bot.order_types import OrderType
@@ -141,18 +142,37 @@ class KStrategy(masterbot):
 
     def run(self):
         order_book = self.data_provider.get_order_book()
-        self.order_library.append(order_book)
-        self.update_cash_reservations()
-        
+        if order_book is None:
+            print("Order book is None. Cannot proceed with strategy.")
+            return
         crypto_value = self.data_provider.get_crypto_value()
+        if crypto_value is None:
+            print("Crypto value is None. Cannot proceed with strategy.")
+            return
+        self.price_to_beat = self.data_provider.get_price_to_beat()
+        if self.price_to_beat is None:
+            print("Price to beat is None. Cannot proceed with strategy.")
+            return
+        if self.data_provider.get_end_timestamp() is None:
+            print("End timestamp is None. Cannot proceed with strategy.")
+            return
+        if self.data_provider.get_market_asset_ids() is None or len(self.data_provider.get_market_asset_ids()) < 2:
+            print("Market asset IDs are None or insufficient. Cannot proceed with strategy.")
+            return
+        self.up_token_id = self.data_provider.get_up_token_id()
+        self.down_token_id = self.data_provider.get_down_token_id()
+        #self.order_library.append(order_book)
+        self.update_cash_reservations()
         current_timestamp = self.data_provider.get_current_timestamp()
         self.predictor.update_past_crypto_values(crypto_value, current_timestamp, self.data_provider.get_end_timestamp())
         self.up_shares = self.market.get_user_holdings().get(self.up_token_id, 0)
         self.down_shares = self.market.get_user_holdings().get(self.down_token_id, 0)
-        
-        self.up_price = self.data_provider.get_mid_price(self.up_token_id)
-        self.down_price = self.data_provider.get_mid_price(self.down_token_id)
-
+        try:
+            self.up_price = self.data_provider.get_mid_price(self.up_token_id)
+            self.down_price = self.data_provider.get_mid_price(self.down_token_id)
+        except Exception as e:
+            print(f"Error fetching mid price: {e}")
+            return
         time_remaining = (self.data_provider.get_end_timestamp() -current_timestamp) / 1000.0
         time_factor = (1 - (self.time_volatility_alpha / (time_remaining + self.time_volatility_alpha)))
         predicted_trend = 0.0
@@ -172,6 +192,8 @@ class KStrategy(masterbot):
         current_updown_value /= (time_factor)**2
         projected_up_value = 0.5 * (1 + erf((predicted_trend + current_updown_value) / sqrt(2)))
         projected_down_value = 1 - projected_up_value
+        self.data_provider.set_fair_value_up(projected_up_value)
+        self.data_provider.set_fair_value_down(projected_down_value)
         self.past_crypto_predictions.append({"timestamp": self.data_provider.get_current_timestamp(),
                                               "up_prediction": projected_up_value,
                                               "down_prediction": projected_down_value})
