@@ -26,7 +26,6 @@ from data_provider.historical_provider import historical_provider
 class live_provider(historical_provider):
     def __init__(self, market_slug_base, binance_symbol, market_type , market):
         self.binance_feed = BinancePriceFeed(binance_symbol)
-        self.binance_feed.on_price_change = self.set_crypto_value
         self.binance_feed.start()
         self.market = market
         self.market_slug_base = market_slug_base
@@ -41,6 +40,10 @@ class live_provider(historical_provider):
         self.up_token_id = None
         self.down_token_id = None
         self.token_ids = None
+        self.fair_value_down = None
+        self.fair_value_up = None
+        self.up_thread = None
+        self.down_thread = None
         #self.run()
 
     def run(self):
@@ -60,13 +63,21 @@ class live_provider(historical_provider):
                     self.up_token_id = None
                     self.down_token_id = None
                     self.token_ids = None
+                    if self.up_thread is not None and self.up_thread.is_alive():
+                        self.up_feed.stop()
+                        self.up_thread.join()
+                    if self.down_thread is not None and self.down_thread.is_alive():
+                        self.down_feed.stop()
+                        self.down_thread.join()
+
                     self.set_market(time_name)
+                    #self.binance_feed.consume()
                 
                 self.metadata = self.get_metadata(time_name, self.market_slug_base)
-                if self.metadata[0].get("eventMetadata", None) is not None:
-                    if self.metadata[0]["eventMetadata"] is not None and self.metadata[0]["eventMetadata"]["priceToBeat"] is not None:
-                        self.set_price_to_beat(self.metadata[0]["eventMetadata"]["priceToBeat"])
-
+                try:
+                    self.set_price_to_beat(self.metadata[0]["eventMetadata"]["priceToBeat"])
+                except Exception as e:
+                    print(f"Error setting price to beat: {e}")
                 #time.sleep(0.1)  # Sleep for a second before the next iteration
                 #print(self.get_best_bid(self.up_token_id), self.get_best_bid(self.down_token_id), self.get_best_ask(self.up_token_id), self.get_best_ask(self.down_token_id), self.get_crypto_value(), self.get_price_to_beat(), self.get_current_timestamp(), self.get_end_timestamp())
             #except Exception as e:
@@ -113,10 +124,10 @@ class live_provider(historical_provider):
                 self.up_token_id = self.token_ids[i]
             elif outcome_name_list[i] == "Down":
                 self.down_token_id = self.token_ids[i]
-            
-        self.up_feed = OrderBookFeed(self.up_token_id, self.order_book)
-        self.down_feed = OrderBookFeed(self.down_token_id, self.order_book)
-        
+        self.order_book_lock = threading.Lock()
+        self.up_feed = OrderBookFeed(self.up_token_id, self.order_book, self.order_book_lock)
+        self.down_feed = OrderBookFeed(self.down_token_id, self.order_book, self.order_book_lock)
+
         # start threads
         self.up_thread = threading.Thread(target=self.up_feed.run, daemon=True)
         self.down_thread = threading.Thread(target=self.down_feed.run, daemon=True)
@@ -125,8 +136,15 @@ class live_provider(historical_provider):
         while self.order_book is None or len(self.order_book) < 2:
             time.sleep(0.1)
         for j in range(len(self.order_book)):
-            print(self.order_book[j][1][1]["min_order_size"])
-            self.market.set_min_order_size(self.order_book[j][0], self.order_book[j][1][1]["min_order_size"])
+            minsize = None
+            while minsize is None:
+                try:
+                    minsize = self.order_book[j][1][1]["min_order_size"]
+                except KeyError:
+                    print(f"min_order_size not found for asset {self.order_book[j][0]}")
+                    minsize = 5
+            if minsize is not None:
+                self.market.set_min_order_size(self.order_book[j][0], minsize)
         print(f"Set market with Up token ID: {self.up_token_id}, Down token ID: {self.down_token_id}, End timestamp: {self.end_timestamp}")
 
     def get_current_timestamp(self):
@@ -139,9 +157,6 @@ class live_provider(historical_provider):
             return json.loads(self.metadata[0]["markets"][0]["outcomes"])
         else:
             return None
-
-    def get_end_timestamp(self):
-        return self.end_timestamp
     
     def get_crypto_value(self):
         return self.binance_feed.get_current_price()
@@ -168,7 +183,7 @@ class live_provider(historical_provider):
                     level["size"] = size
                     break
     
-
+    
 if __name__ == "__main__":
     if len(sys.argv) < 4:
         print("Usage: python live_provider.py <market_slug_base> <binance_symbol> <market_type>")

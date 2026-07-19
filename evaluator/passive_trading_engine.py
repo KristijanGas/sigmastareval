@@ -23,6 +23,7 @@ from data.data_interface import parse_time_name_5m, parse_time_name_hourly
 from evaluator.replay_engine import load_bot
 from evaluator.passive_market_simulator import passive_market_simulator
 from data.data_interface import parse_time_name_5m, parse_time_name_hourly
+from live_dashboard import LiveDashboard
 
 class PassiveTradingEngine:
     def __init__(self, bot_path, market_slug, market_binance, market_type):
@@ -41,7 +42,11 @@ class PassiveTradingEngine:
         self.market.data_provider = self.live_provider
         self.market_thread = threading.Thread(target=self.market.run, args=(self.market_type,), daemon=True)
         self.market_thread.start()
-    
+        self.bot_thread = threading.Thread(target=self.run_bot, daemon=True)
+        self.bot_thread.start()
+        self.live_dashboard = LiveDashboard(self.live_provider, history=50000)
+        self.live_dashboard.run()
+        
     def run_bot(self):
         while True:
             if hasattr(self.live_provider, 'metadata') and self.live_provider.metadata is not None:
@@ -55,8 +60,11 @@ class PassiveTradingEngine:
                 time_name = parse_time_name_5m()
             if self.old_time_name is None or time_name != self.old_time_name:
                 self.bot.first_run_setup()
+                self.old_time_name = time_name
             self.bot.run()
-
+            time.sleep(0.05)
+            #print("cash: ", self.market.get_user_cash())
+            #print("holdings: ", self.market.get_user_holdings())
 
 def main():
     if len(sys.argv) < 4:

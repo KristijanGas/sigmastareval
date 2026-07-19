@@ -20,27 +20,35 @@ class passive_market_simulator(market_simulator):
         super().__init__(data_provider, starting_cash, base_name)
         self.old_time_name = None
         self.price_to_beat = None
+        self.clobTokenIds = None
+        self.outcomes = None
     
     def run(self, market_type):
-        while self.price_to_beat is None:
-            self.price_to_beat = self.data_provider.get_price_to_beat()
-            #print(f"Waiting for price to beat. Current value: {self.price_to_beat}")
-        self.clobTokenIds = self.data_provider.get_market_asset_ids()
-        self.outcomes = self.data_provider.get_outcomes()
-        print(f"Price to beat: {self.price_to_beat}, market initialized with starting cash: {self.current_cash}")
         while True:
-            if market_type == "hourly":
-                time_name = parse_time_name_hourly()["hourly_name"]
-            elif market_type == "5m":
-                time_name = parse_time_name_5m()
-            if self.old_time_name is not None:
-                if time_name != self.old_time_name:
-                    final_price = self.data_provider.get_crypto_value()
-                    self.resolve_market(final_price, self.price_to_beat, self.outcomes, self.clobTokenIds)
-                    self.price_to_beat = None
-                    while self.price_to_beat is None:
-                        self.price_to_beat = self.data_provider.get_price_to_beat()
+            while self.price_to_beat is None:
+                self.price_to_beat = self.data_provider.get_price_to_beat()
+            while self.clobTokenIds is None or self.outcomes is None:
+                self.clobTokenIds = self.data_provider.get_market_asset_ids()
+                self.outcomes = self.data_provider.get_outcomes()
+            print(f"Price to beat: {self.price_to_beat}, market initialized with starting cash: {self.current_cash}")
+            print(f"Market asset IDs: {self.clobTokenIds}, Market outcomes: {self.outcomes}")
+            while True:
+                if market_type == "hourly":
+                    time_name = parse_time_name_hourly()["hourly_name"]
+                elif market_type == "5m":
+                    time_name = parse_time_name_5m()
+                if self.old_time_name is not None:
                     self.clobTokenIds = self.data_provider.get_market_asset_ids()
                     self.outcomes = self.data_provider.get_outcomes()
-            self.old_time_name = time_name
-            self.process_orders()
+                    if time_name != self.old_time_name:
+                        final_price = self.data_provider.get_crypto_value()
+                        print("Final price: ", final_price, self.price_to_beat, self.outcomes, self.clobTokenIds)
+                        self.resolve_market(final_price, self.price_to_beat, self.outcomes, self.clobTokenIds)
+                        self.price_to_beat = None
+                        self.clobTokenIds = None
+                        self.outcomes = None
+                        self.old_time_name = time_name
+                        break
+
+                self.old_time_name = time_name
+                self.process_orders()

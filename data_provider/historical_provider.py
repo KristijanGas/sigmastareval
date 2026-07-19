@@ -200,7 +200,19 @@ class historical_provider:
         if self.market is None:
             raise ValueError("Market is not set.")
         return self.market.get_user_cash()
+    
+    def set_fair_value_up(self, fair_value):
+        self.fair_value_up = fair_value
 
+    def set_fair_value_down(self, fair_value):
+        self.fair_value_down = fair_value
+    
+    def get_fair_value_up(self):
+        return self.fair_value_up
+    
+    def get_fair_value_down(self):
+        return self.fair_value_down
+    
     def set_order_book(self, order_book):
         self.order_book = order_book
     

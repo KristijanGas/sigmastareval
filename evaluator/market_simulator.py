@@ -243,6 +243,7 @@ class market_simulator:
             self.current_cash += self.user_holdings[winning_token_id]
             self.user_holdings[winning_token_id] = 0
         self.user_holdings = {}
+        print(f"Market resolved. Winning asset: {winning_asset}, Winning asset ID: {winning_token_id}, Final price: {final_price}. User cash: {self.current_cash}")
         return winning_asset
         
         

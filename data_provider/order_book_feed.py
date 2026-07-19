@@ -7,10 +7,11 @@ from zoneinfo import ZoneInfo
 import urllib
 
 class OrderBookFeed:
-    def __init__(self, asset_id, order_book=None):
-        self._lock = threading.Lock()
+    def __init__(self, asset_id, order_book=None, lock=None):
+        self._lock = lock
         self.asset_id = asset_id
         self.order_book = order_book
+        self.stopped = False
 
     def query_order_book(self, token_id):
         path = f"https://clob.polymarket.com/book?token_id={token_id}"
@@ -32,7 +33,7 @@ class OrderBookFeed:
         return (token_id, market_data)
     
     def run(self):
-        while True:
+        while self.stopped is False:
             try:
                 order_book_for_asset = self.query_order_book(self.asset_id)
             except Exception as e:
@@ -50,3 +51,6 @@ class OrderBookFeed:
             if found == 0:
                 with self._lock:
                     self.order_book.append([self.asset_id, order_book_for_asset])
+        return
+    def stop(self):
+        self.stopped = True
