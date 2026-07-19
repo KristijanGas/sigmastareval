@@ -112,7 +112,7 @@ class live_provider(historical_provider):
             try:
                 self.metadata = self.get_metadata(time_name, self.market_slug_base)
             except Exception as e:
-                print(f"Error fetching metadata for {self.market_slug_base} at {time_name}: {e}")
+                #print(f"Error fetching metadata for {self.market_slug_base} at {time_name}: {e}")
                 time.sleep(1)
 
         self.set_end_timestamp(self.metadata[0]["endDate"])
