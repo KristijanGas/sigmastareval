@@ -74,17 +74,20 @@ class passive_market_simulator(market_simulator):
                 self.holdings_history.append(
                     {
                         "timestamp" : self.data_provider.get_current_timestamp(),
-                        "holdings" : self.data_provider.get_user_holdings()
+                        "holdings" : self.get_user_holdings()
                     }
                 )
                 self.cash_history.append(
                     {
                         "timestamp" : self.data_provider.get_current_timestamp(),
-                        "cash" : self.data_provider.get_user_cash()
+                        "cash" : self.get_user_cash()
                     }
                 )
                 self.old_time_name = time_name
-                self.process_orders()
+                try:
+                    self.process_orders()
+                except Exception as e:
+                    print(f"MARKET SIMULATOR: Error occurred while processing orders: {e}")
     
     def store_analytics(self):
         # Store the cash and holdings history in the analytics dictionary
@@ -94,6 +97,10 @@ class passive_market_simulator(market_simulator):
         analytics["final_cash"] = self.current_cash
         analytics["order_placements"] = self.order_placements
         analytics["transactions"] = self.transactions
+        self.order_placements.clear()
+        self.transactions.clear()
+        self.holdings_history.clear()
+        self.cash_history.clear()
 
         store_path = REPO_ROOT / "live_runs" / "passive" / f"{self.base_name}" / f"{self.base_name}-{self.old_time_name}.json.gz"
         os.makedirs(os.path.dirname(store_path), exist_ok=True)

@@ -14,7 +14,6 @@ class market_simulator:
         self.min_order_size = {}
         self.fee_percent = 0.07
         self.new_order = {}
-        self.order_placements = []
         # user tracking
         self.current_cash = starting_cash
         self.orders = []
@@ -22,6 +21,7 @@ class market_simulator:
         self.user_holdings = {}
         # analytics
         self.transactions = []
+        self.order_placements = []
 
     def set_min_order_size(self, asset_id, min_order_size):
         self.min_order_size[asset_id] = min_order_size
@@ -245,6 +245,9 @@ class market_simulator:
             self.current_cash += self.user_holdings[winning_token_id]
             self.user_holdings[winning_token_id] = 0
         self.user_holdings = {}
+        self.orders = []
+        self.order_id_counter = 0
+        self.new_order = {}
         print(f"Market resolved. Winning asset: {winning_asset}, Winning asset ID: {winning_token_id}, Final price: {final_price}. User cash: {self.current_cash}")
         return winning_asset
         
