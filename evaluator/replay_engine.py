@@ -136,7 +136,7 @@ class replay_engine:
             if i == 0:
                 self.bot.first_run_setup()
             if data["all_clobs"][i] is None:
-                print(f"Warning: Missing data at index {i}. Skipping this datapoint. File: {filename}")
+                #print(f"Warning: Missing data at index {i}. Skipping this datapoint. File: {filename}")
                 continue
             self.data_provider.set_order_book(data["all_clobs"][i])
             order_book_timestamp = None
@@ -148,7 +148,7 @@ class replay_engine:
                 else:
                     order_book_timestamp = data["all_clobs"][i][1][1]["timestamp"]
             if order_book_timestamp is None:
-                print(f"Warning: Missing order book timestamp at index {i}. Skipping this datapoint. File: {filename}")
+                #print(f"Warning: Missing order book timestamp at index {i}. Skipping this datapoint. File: {filename}")
                 continue
             while crypto_index < len(data["all_prices"]):
                 
@@ -242,7 +242,12 @@ class replay_engine:
         dataset_path = sort_paths_chronologically(dataset_path)
         for gz_file in dataset_path:
             with gzip.open(gz_file, "rt", encoding="utf-8") as f:
-                data = json.load(f)
+                try:
+                    data = json.load(f)
+                except json.JSONDecodeError as e:
+                    print(f"Error decoding JSON from {gz_file}: {e}")
+                    continue
+
                 analytics = self.evaluate_datapoint(data, gz_file, starting_cash)
                 if analytics is not None:
                     #starting_cash = analytics["final_cash"]

@@ -36,11 +36,11 @@ class KStrategy(masterbot):
 
         #parameters
         self.time_volatility_alpha = 1050
-        self.correction_treshold = 0.04
+        self.correction_treshold = 0.03
         self.correction_time_window = 10000
         self.investment_cash_percent = 0.2
         self.lookahead_time = 0
-        self.edge_treshold = 0.04
+        self.edge_treshold = 0.03
         self.crypto_price_stdev = {"bitcoin-up-or-down": 300, "ethereum-up-or-down": 10.4, "solana-up-or-down": 0.6, "xrp-up-or-down": 0.0068,
                                    "btc-updown-5m": 10, "eth-updown-5m": 10.4}  # Example values for standard deviation of crypto prices
 
@@ -198,11 +198,12 @@ class KStrategy(masterbot):
                                               "up_prediction": projected_up_value,
                                               "down_prediction": projected_down_value})
         
-        edge = projected_up_value - self.up_price
-        desired_shares = self.data_provider.can_buy_with(self.up_token_id, self.get_usable_cash() / 2)
-        #desired_shares = min(desired_shares, 20)
-        if edge > self.edge_treshold:
+        edge_up = projected_up_value - self.up_price
+        edge_down = projected_down_value - self.down_price
+        desired_shares = self.data_provider.can_buy_with(self.up_token_id, self.get_usable_cash() / 3)
+        desired_shares = max(desired_shares, 5)
+        if edge_up > self.edge_treshold * (1 + 2 * time_factor):
             self.manage_desired_inventory(desired_shares, 0, projected_up_value, projected_down_value)
-        elif edge < -self.edge_treshold:
+        elif edge_down > self.edge_treshold * (1 + 2 * time_factor):
             self.manage_desired_inventory(0, desired_shares, projected_up_value, projected_down_value)
         self.update_estimation_alpha(current_timestamp, self.up_price, projected_up_value)

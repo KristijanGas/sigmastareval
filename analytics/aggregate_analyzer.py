@@ -1,5 +1,5 @@
 from analytics.performance_result import PerformanceResult
-from statistics import mean, median, stdev
+from statistics import geometric_mean, mean, median, stdev
 import matplotlib.pyplot as plt
 import math
 import numpy as np
@@ -23,7 +23,7 @@ class AggregateAnalyzer:
     def average_roi(self):
         if len(self.results) == 0:
             return 0
-        return mean(r.roi for r in self.results)
+        return geometric_mean((r.roi + 1) for r in self.results) - 1
     
     def median_roi(self):
         if len(self.results) == 0:
@@ -256,9 +256,9 @@ class AggregateAnalyzer:
             stdev_profit_factor = round(self.stdev_profit_factor(), 2) 
 
         values = [
-            [round(self.average_roi(),2), round(self.median_roi(),2), stdev_roi, round(self.min_roi(),2), round(self.max_roi(),2)],
+            [round(self.average_roi() * 100,3), round(self.median_roi() * 100,3), stdev_roi, round(self.min_roi() * 100,3), round(self.max_roi() * 100,3)],
             [round(self.average_pnl(),2), round(self.median_pnl(),2), stdev_pnl, round(self.min_pnl(),2), round(self.max_pnl(),2)],
-            [round(self.average_max_drawdown(),2), round(self.median_max_drawdown(),2), stdev_max_dd, round(self.minimal_max_drawdown(),2), round(self.worst_drawdown(),2)],
+            [round(self.average_max_drawdown() * 100,2), round(self.median_max_drawdown() * 100,2), stdev_max_dd, round(self.minimal_max_drawdown() * 100,2), round(self.worst_drawdown() * 100,2)],
             [round(self.average_trade_count(),2), round(self.median_trade_count(),2), stdev_trades, round(self.min_trade_count(),2), round(self.max_trade_count(),2)],
             [round(self.average_idle_time(),2), round(self.median_idle_time(),2), stdev_idle_time, round(self.min_idle_time(),2), round(self.max_idle_time(),2)],
             [round(self.average_profit_factor(),2), round(self.median_profit_factor(),2), stdev_profit_factor, round(self.min_profit_factor(),2), round(self.max_profit_factor(),2)],
