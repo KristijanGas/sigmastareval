@@ -76,6 +76,7 @@ class SnapshotBuilder:
                     ),
                     time_to_end_ms=time_to_end_ms,
                     price_to_beat=self.price_to_beat,
+                    market_end_timestamp=self.market_end_timestamp,
                 )
             )
         return snapshots

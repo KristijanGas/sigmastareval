@@ -32,6 +32,7 @@ class MarketSnapshot:
     crypto_price: float | None
     crypto_price_timestamp: int | None
 
+    market_end_timestamp: int | None
     time_to_end_ms: int | None = None
     price_to_beat: float | None = None
 
@@ -54,6 +55,7 @@ class PricePrediction:
     horizon_ms: int
     predicted_midpoint: float   #predicted value of midpoint
     current_midpoint: float   #midpoint at prediction time
+    predicted_change: float | None = None
 
     @property
     def target_timestamp(self): #timestamp for which the prediction is intended
