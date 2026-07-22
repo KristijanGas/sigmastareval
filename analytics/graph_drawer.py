@@ -138,11 +138,11 @@ def draw_graph(analytics: dict, output_path: str | Path | None = None, show: boo
 		)
 		price_handles.append(line)
 
-	crypto_prediction_timestamps, crypto_prediction_values = _series_from_points(analytics.get("past_crypto_predictions", []), value_key="up_prediction")
-	crypto_prediction_values_relative = [value for value in crypto_prediction_values]
+	prediction_timestamps, up_prediction_values = _series_from_points(analytics.get("past_crypto_predictions", []), value_key="up_prediction")
+	up_prediction_values_relative = [value for value in up_prediction_values]
 	ax_prices.plot(
-		crypto_prediction_timestamps,
-		crypto_prediction_values_relative,
+		prediction_timestamps,
+		up_prediction_values_relative,
 		color="#ff0ef36c",
 		linewidth=1.2,
 		label="crypto prediction",
@@ -212,6 +212,8 @@ def draw_graph(analytics: dict, output_path: str | Path | None = None, show: boo
 
 	crypto_timestamps, crypto_values = _series_from_points(crypto_prices, value_key="price")
 	relative_crypto_values = [value - price_to_beat for value in crypto_values]
+	prediction_timestamps, crypto_filtered = _series_from_points(analytics.get("past_crypto_predictions", []), value_key="kalman_filtered_crypto")
+	relative_crypto_filtered = [value - price_to_beat for value in crypto_filtered]
 
 	if crypto_timestamps and crypto_values:
 		
@@ -224,8 +226,15 @@ def draw_graph(analytics: dict, output_path: str | Path | None = None, show: boo
 		)
 		ax_crypto.fill_between(crypto_timestamps, relative_crypto_values, color="#2ca02c", alpha=0.1)
 
+		ax_crypto.plot(
+			prediction_timestamps,
+			relative_crypto_filtered,
+			color="#ff0ef36c",
+			linewidth=1.2,
+			label="crypto prediction",
+		)
 
-	#_set_dynamic_ylim(ax_crypto, crypto_prediction_values_relative + relative_crypto_values)
+	#_set_dynamic_ylim(ax_crypto, up_prediction_values_relative + relative_crypto_values)
 	if isinstance(price_to_beat, (int, float)):
 		ax_crypto.axhline(
 			0,

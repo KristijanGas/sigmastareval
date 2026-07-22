@@ -49,7 +49,11 @@ class BinancePriceFeed:
             data = self._buffer
             self._buffer = []
         return data
-    
+
+    def read_buffer(self):
+        with self._lock:
+            return self._buffer
+
     def get_current_price(self):
         with self._lock:
             if len(self._buffer) == 0:

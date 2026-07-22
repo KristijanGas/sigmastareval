@@ -12,9 +12,10 @@ from bot.masterbot import masterbot
 from bot.order_actions import OrderAction
 from bot.order_types import OrderType
 from bot.prediction_models.polynomial_predictor import polynomial_predictor
+from data_provider.historical_provider import historical_provider
 
 class KStrategy(masterbot):
-    def __init__(self, in_production=False, market=None, data_provider=None):
+    def __init__(self, in_production=False, market=None, data_provider: historical_provider = None):
         super().__init__(in_production, market, data_provider)
         self.order_library = []
         self.starting_cash = None
@@ -74,11 +75,6 @@ class KStrategy(masterbot):
     
     def get_usable_cash(self):
         return self.market.get_user_cash() - self.unusable_cash - self.money_reserved_for_up - self.money_reserved_for_down
-    
-    def update_past_trends(self, new_trend, current_timestamp):
-        self.past_weighted_trends.append({"timestamp": current_timestamp, "trend": new_trend})
-        while self.past_weighted_trends[0]["timestamp"] + self.past_trends_windowsize < current_timestamp:
-            self.past_weighted_trends.popleft()
         
     def manage_desired_inventory(self, wanted_up_shares, wanted_down_shares, projected_up_value=None, projected_down_value=None):
         dif_up_shares = wanted_up_shares - self.up_shares
@@ -161,7 +157,6 @@ class KStrategy(masterbot):
             return
         self.up_token_id = self.data_provider.get_up_token_id()
         self.down_token_id = self.data_provider.get_down_token_id()
-        #self.order_library.append(order_book)
         self.update_cash_reservations()
         current_timestamp = self.data_provider.get_current_timestamp()
         self.predictor.update_past_crypto_values(crypto_value, current_timestamp, self.data_provider.get_end_timestamp())
@@ -173,6 +168,9 @@ class KStrategy(masterbot):
         except Exception as e:
             print(f"Error fetching mid price: {e}")
             return
+        
+        #kalman_filtered = self.data_provider.get_kalman_filtered(self.kalman_window_size)
+        #velocity = float(kalman_filtered[-1]["price"])
         time_remaining = (self.data_provider.get_end_timestamp() -current_timestamp) / 1000.0
         time_factor = (1 - (self.time_volatility_alpha / (time_remaining + self.time_volatility_alpha)))
         predicted_trend = 0.0
@@ -196,8 +194,10 @@ class KStrategy(masterbot):
         self.data_provider.set_fair_value_down(projected_down_value)
         self.past_crypto_predictions.append({"timestamp": self.data_provider.get_current_timestamp(),
                                               "up_prediction": projected_up_value,
-                                              "down_prediction": projected_down_value})
-        
+                                              "down_prediction": projected_down_value,
+                                              #"kalman_filtered_crypto": velocity
+                                              })
+
         edge_up = projected_up_value - self.up_price
         edge_down = projected_down_value - self.down_price
         desired_shares = self.data_provider.can_buy_with(self.up_token_id, self.get_usable_cash() / 3)

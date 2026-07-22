@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 import json
 from zoneinfo import ZoneInfo
+import numpy as np
 
 class historical_provider:
     def __init__(self, metadata):
@@ -11,6 +12,7 @@ class historical_provider:
         self.metadata = metadata
         self.up_token_id = None
         self.down_token_id = None
+        self.past_crypto_values = []
         outcome_name_list = json.loads(self.metadata[0]["markets"][0]["outcomes"])
         self.token_ids = json.loads(self.metadata[0]["markets"][0]["clobTokenIds"])
         for i in range(len(outcome_name_list)):
@@ -39,6 +41,19 @@ class historical_provider:
     
     def get_crypto_value(self):
         return float(self.crypto_value["price"])
+    
+    def get_past_crypto_values(self):
+        return self.past_crypto_values
+    
+    def get_last_crypto_values(self, last_ms):
+        current_timestamp = self.get_current_timestamp()
+        ticks = []
+        past_crypto_values = self.get_past_crypto_values()
+        for entry in past_crypto_values:
+            timestamp = entry["timestamp"]
+            if current_timestamp - timestamp < last_ms:
+                ticks.append(entry)
+        return ticks
     
     def get_price_to_beat(self):
         return self.price_to_beat
@@ -220,6 +235,7 @@ class historical_provider:
         self.price_to_beat = price_to_beat
 
     def set_crypto_value(self, crypto_value):
+        self.past_crypto_values.append(crypto_value)
         self.crypto_value = crypto_value
 
     def set_end_timestamp(self, end_date):

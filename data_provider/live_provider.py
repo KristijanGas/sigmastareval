@@ -154,6 +154,9 @@ class live_provider(historical_provider):
         current_time = datetime.now(ZoneInfo("America/New_York"))
         current_time = int(current_time.timestamp() * 1000)
         return current_time
+
+    def get_past_crypto_values(self):
+        return self.binance_feed.read_buffer()
     
     def get_outcomes(self):
         if self.metadata is not None:
