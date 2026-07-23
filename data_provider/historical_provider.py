@@ -13,6 +13,7 @@ class historical_provider:
         self.up_token_id = None
         self.down_token_id = None
         self.past_crypto_values = []
+        self.current_timestamp = 0
         outcome_name_list = json.loads(self.metadata[0]["markets"][0]["outcomes"])
         self.token_ids = json.loads(self.metadata[0]["markets"][0]["clobTokenIds"])
         for i in range(len(outcome_name_list)):
@@ -31,11 +32,8 @@ class historical_provider:
         return self.down_token_id
 
     def get_current_timestamp(self):
-        #if int(self.order_book[0][1]["timestamp"]) < int(self.crypto_value["timestamp"]):
-        #    print(f"Warning: Order book timestamp {self.order_book[0][1]['timestamp']} is less than crypto value timestamp {self.crypto_value['timestamp']}.")
-        # timestamps recorded from polymarket do NOT have to go in order
-        return max(int(self.order_book[0][1]["timestamp"]),int(self.order_book[1][1]["timestamp"]) )
-    
+        return self.current_timestamp
+
     def get_end_timestamp(self):
         return self.end_timestamp
     
@@ -215,7 +213,10 @@ class historical_provider:
         if self.market is None:
             raise ValueError("Market is not set.")
         return self.market.get_user_cash()
-    
+
+    def set_current_timestamp(self, timestamp):
+        self.current_timestamp = timestamp
+
     def set_fair_value_up(self, fair_value):
         self.fair_value_up = fair_value
 
