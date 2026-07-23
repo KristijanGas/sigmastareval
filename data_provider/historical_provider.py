@@ -160,7 +160,7 @@ class historical_provider:
 
         remaining_money = investment
         shares = 0.0
-        tick_size = float(self.get_asset(asset_id)["tick_size"])
+        tick_size = float(self.get_asset(asset_id).get("tick_size", 0.01)) # defaults to 0.01
         pointer = len(asks) - 1
 
         while remaining_money > 0 and pointer >= 0:

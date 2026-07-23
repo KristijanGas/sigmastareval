@@ -1,56 +1,87 @@
-from datetime import datetime, timedelta
 import json
-import threading
 import time
-from zoneinfo import ZoneInfo
-
-import urllib
+import websocket
 
 class OrderBookFeed:
     def __init__(self, asset_id, order_book=None, lock=None):
         self._lock = lock
-        self.asset_id = asset_id
+        self.asset_id = str(asset_id)  # Ensure asset ID is string-formatted
         self.order_book = order_book
         self.stopped = False
+        self.ws = None
 
-    def query_order_book(self, token_id):
-        path = f"https://clob.polymarket.com/book?token_id={token_id}"
-        #print(f"Fetching order book for token_id {token_id} from {path}")
-        request = urllib.request.Request(
-            path,
-            headers={
-                "User-Agent": "Mozilla/5.0",
-                "Accept": "application/json, text/plain, */*",
-                "Referer": "https://polymarket.com/",
-            },
-        )
-        try:
-            with urllib.request.urlopen(request, timeout=20) as url:
-                market_data = json.loads(url.read().decode())
-        except Exception as e:
-            print(f"Error fetching CLOB data for token_id {token_id}: {e}")
-            market_data = None
-        return (token_id, market_data)
-    
-    def run(self):
-        while self.stopped is False:
-            try:
-                order_book_for_asset = self.query_order_book(self.asset_id)
-            except Exception as e:
-                print(f"Error in OrderBookFeed WebSocket: {e}")
-                time.sleep(5)  # Wait before trying to reconnect
-            found = 0
-
+    def _update_shared_book(self, market_data):
+        """Safely updates or appends to the shared structure using your exact list layout."""
+        found = False
+        with self._lock:
             for i in range(len(self.order_book)):
                 if self.order_book[i][0] == self.asset_id:
-                    with self._lock:
-                        self.order_book[i] = order_book_for_asset
-                    found = 1
+                    self.order_book[i] = [self.asset_id, market_data]
+                    found = True
                     break
+            
+            if not found:
+                self.order_book.append([self.asset_id, market_data])
+        #print(self.order_book)
 
-            if found == 0:
-                with self._lock:
-                    self.order_book.append([self.asset_id, order_book_for_asset])
-        return
+    def _on_message(self, ws, message):
+        """Processes real-time book frames directly from Polymarket."""
+        try:
+            data = json.loads(message)
+            
+            event_type = data["event_type"]
+            if event_type == "book" or event_type == "tick_size_change":
+                self._update_shared_book(data)
+
+        except Exception as e:
+            print(f"Error parsing Polymarket WS frame: {e}")
+
+    def _on_open(self, ws):
+        """Sends the exact subscription payload format required by Polymarket CLOB."""
+        subscribe_payload = {
+            "type": "market",
+            "assets_ids": [self.asset_id],
+            "custom_feature_enabled": True
+        }
+        ws.send(json.dumps(subscribe_payload))
+        print(f"Subscription frame sent for asset: {self.asset_id}")
+
+    def _on_error(self, ws, error):
+        print(f"WebSocket Error: {error}")
+
+    def _on_close(self, ws, close_status_code, close_msg):
+        print(f"WebSocket closed: {close_status_code} - {close_msg}")
+
+    def run(self):
+        """Executes the connection loop safely over the background thread."""
+        websocket_url = "wss://ws-subscriptions-clob.polymarket.com/ws/market"
+        
+        while not self.stopped:
+            try:
+                self.ws = websocket.WebSocketApp(
+                    websocket_url,
+                    on_open=self._on_open,
+                    on_message=self._on_message,
+                    on_error=self._on_error,
+                    on_close=self._on_close
+                )
+                
+                self.ws.run_forever(
+                    ping_interval=10,
+                    ping_timeout=5
+                )
+                
+            except Exception as e:
+                print(f"Reconnecting after socket failure: {e}")
+            
+            if not self.stopped:
+                time.sleep(5) 
+
     def stop(self):
+        """Kills the active connection gracefully."""
         self.stopped = True
+        if self.ws:
+            try:
+                self.ws.close()
+            except Exception:
+                pass
