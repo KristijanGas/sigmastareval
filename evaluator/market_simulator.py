@@ -13,10 +13,13 @@ class market_simulator:
         #self.market_name = market_name
         self.min_order_size = {}
         self.fee_percent = 0.07
+        self.on_chain_delay = 2000
+        self.matching_delay = 500
         self.new_order = {}
         # user tracking
         self.current_cash = starting_cash
         self.orders = []
+        self.pending_orders = []
         self.order_id_counter = 0
         self.user_holdings = {}
         # analytics
@@ -47,7 +50,7 @@ class market_simulator:
             raise ValueError(f"Invalid asset ID: {asset_id}")
         
         self.order_id_counter += 1
-        self.orders.append(
+        self.pending_orders.append(
             {
             "order_id": self.order_id_counter,
             "asset_id": asset_id,
@@ -70,7 +73,6 @@ class market_simulator:
                 "timeout": timeout,
             }
         )
-        self.new_order[self.order_id_counter] = True
         return self.order_id_counter
 
     def cancel_order(self, order_id):
@@ -137,10 +139,24 @@ class market_simulator:
             pointer -= 1
         return (gain, successful_matches, update_bids)
 
+    def accept_orders(self):
+        current_timestamp = self.data_provider.get_current_timestamp()
+        new_pending_orders = []
+        for pending_order in self.pending_orders:
+            order_timestamp = pending_order["timestamp"]
+            if current_timestamp - order_timestamp >= self.matching_delay:
+                self.orders.append(pending_order)
+                self.new_order[pending_order["order_id"]] = True
+            else:
+                new_pending_orders.append(pending_order)
+
+        self.pending_orders = new_pending_orders
+
     def process_orders(self):
         orderIDs_to_remove = []
         if len(self.orders) > 500:
             print(f"Warning: More than 500 orders in the system, bot might be making mistakes. Current order count: {len(self.orders)}")
+        self.accept_orders()
         for order in self.orders:
             asset_id = order["asset_id"]
             order_type = order["order_type"]
@@ -246,6 +262,7 @@ class market_simulator:
             self.user_holdings[winning_token_id] = 0
         self.user_holdings = {}
         self.orders = []
+        self.pending_orders = []
         self.order_id_counter = 0
         self.new_order = {}
         print(f"Market resolved. Winning asset: {winning_asset}, Winning asset ID: {winning_token_id}, Final price: {final_price}. User cash: {self.current_cash}")

@@ -137,7 +137,6 @@ class replay_engine:
         self.bot.first_run_setup()
         starting_timestamp = data["all_prices"][crypto_index]["timestamp"]
         step_ms = 400
-        artificial_lag = 0
         for current_timestamp in range(starting_timestamp, self.data_provider.get_end_timestamp() + step_ms, step_ms):
             self.data_provider.set_current_timestamp(current_timestamp)
             skip = 0
@@ -175,7 +174,7 @@ class replay_engine:
                     continue
                 crypto_value_timestamp = data["all_prices"][crypto_index]["timestamp"]
 
-                if crypto_value_timestamp + artificial_lag > current_timestamp:
+                if crypto_value_timestamp > current_timestamp:
                     break
                 else:
                     crypto_prices.append(data["all_prices"][crypto_index])

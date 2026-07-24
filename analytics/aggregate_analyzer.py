@@ -23,8 +23,12 @@ class AggregateAnalyzer:
     def average_roi(self):
         if len(self.results) == 0:
             return 0
-        return geometric_mean((r.roi + 1) for r in self.results) - 1
-    
+        rois = [r.roi + 1 for r in self.results]
+        for i in range(len(rois)):
+            if rois[i] <= 0:
+                rois[i] = 1e-10  # Replace non-positive values with a small positive number
+        return geometric_mean(rois) - 1
+
     def median_roi(self):
         if len(self.results) == 0:
             return 0
