@@ -16,6 +16,9 @@ class market_simulator:
         self.on_chain_delay = 2000
         self.matching_delay = 500
         self.new_order = {}
+        # order control
+        self.last_placed_order_type = {}
+        self.order_timeout = 1000
         # user tracking
         self.current_cash = starting_cash
         self.orders = []
@@ -50,6 +53,17 @@ class market_simulator:
         if asset_id not in self.data_provider.get_market_asset_ids():
             raise ValueError(f"Invalid asset ID: {asset_id}")
         
+        if order_action == OrderAction.BID and self.current_cash < order_size * price:
+            return None  # Not enough cash to place the order
+        if order_action == OrderAction.ASK and self.user_holdings.get(asset_id, 0) < order_size:
+            return None  # Not enough holdings to place the order
+
+        if self.last_placed_order_type.get((asset_id, order_action)) is not None:
+            time_since_last_order = self.data_provider.get_current_timestamp() - self.last_placed_order_type[(asset_id, order_action)]
+            if time_since_last_order < self.order_timeout:
+                return None  # Not enough time has passed since the last order of this type for this asset
+            
+        self.last_placed_order_type[(asset_id, order_action)] = self.data_provider.get_current_timestamp()
         self.order_id_counter += 1
         self.pending_orders.append(
             {
