@@ -22,6 +22,7 @@ class market_simulator:
         self.pending_orders = []
         self.order_id_counter = 0
         self.user_holdings = {}
+        self.order_matches = []
         # analytics
         self.transactions = []
         self.order_placements = []
@@ -167,8 +168,14 @@ class market_simulator:
             update_asks = None
             update_bids = None
             cash_before_this_order = self.current_cash
+            on_chain_update = {
+                "order_id": order["order_id"], 
+                "order_action": order_action, 
+                "asset_id": asset_id, 
+                "price": 0, "size": 0,
+                "timestamp": self.data_provider.get_current_timestamp()
+            } # delayed payout
 
-            
             if order_type == OrderType.GTC or order_type == OrderType.GTD or order_type == OrderType.FAK:
                 if  order_type == OrderType.GTD and self.data_provider.get_current_timestamp() > timeout: # gtd expires while gtc does not
                     orderIDs_to_remove.append(order["order_id"])
@@ -179,13 +186,20 @@ class market_simulator:
                     successful_matches = round(successful_matches, 2)
                     money_spent = round(money_spent, 8)
                     self.current_cash -= money_spent
-                    self.user_holdings[asset_id] = self.user_holdings.get(asset_id, 0) + successful_matches
+                    #self.user_holdings[asset_id] = self.user_holdings.get(asset_id, 0) + successful_matches
+                    on_chain_update["size"] = successful_matches
+                    if successful_matches > 0:
+                        self.order_matches.append(on_chain_update)
+
                 elif order_action == OrderAction.ASK:
                     money_earned, successful_matches, update_bids = self.match_sell(asset_id, min(order_size, self.user_holdings.get(asset_id, 0)), price)
                     successful_matches = round(successful_matches, 2)
                     money_earned = round(money_earned, 8)
-                    self.current_cash += money_earned
+                    #self.current_cash += money_earned
+                    on_chain_update["price"] = money_earned
                     self.user_holdings[asset_id] = self.user_holdings.get(asset_id, 0) - successful_matches
+                    if successful_matches > 0:
+                        self.order_matches.append(on_chain_update)
                 else:
                     raise ValueError(f"Unknown order action: {order_action}")
                 order["order_size"] -= successful_matches
@@ -199,16 +213,23 @@ class market_simulator:
                     successful_matches = round(successful_matches, 2)
                     if successful_matches == order_size:
                         self.current_cash -= money_spent
-                        self.user_holdings[asset_id] = self.user_holdings.get(asset_id, 0) + successful_matches
+                        #self.user_holdings[asset_id] = self.user_holdings.get(asset_id, 0) + successful_matches
+                        on_chain_update["size"] = successful_matches
                         orderIDs_to_remove.append(order["order_id"])
                         update_asks = potential_update_asks
+                        if successful_matches > 0:
+                            self.order_matches.append(on_chain_update)
+
                 elif order_action == OrderAction.ASK:
                     money_earned, successful_matches, potential_update_bids = self.match_sell(asset_id, min(order_size, self.user_holdings.get(asset_id, 0)), price)
                     if successful_matches == order_size:
-                        self.current_cash += money_earned
+                        #self.current_cash += money_earned
+                        on_chain_update["price"] = money_earned
                         self.user_holdings[asset_id] = self.user_holdings.get(asset_id, 0) - successful_matches
                         orderIDs_to_remove.append(order["order_id"])
                         update_bids = potential_update_bids
+                        if successful_matches > 0:
+                            self.order_matches.append(on_chain_update)
                 else:
                     raise ValueError(f"Unknown order action: {order_action}")
                 #self.orders.remove(order) # fills entirely or dies instantly
@@ -233,6 +254,7 @@ class market_simulator:
                         "price": price,
                         "money_after_order": self.current_cash,
                         "user_holdings_after_order": self.user_holdings.get(asset_id, 0),
+                        "on_chain_update": on_chain_update
                     }
                 )
                 
@@ -244,6 +266,26 @@ class market_simulator:
             self.cancel_order(order_id)
 
         self.new_order.clear()
+        self.on_chain_update()
+
+    def on_chain_update(self):
+        still_pending_order_matches = []
+        for update in self.order_matches:
+            asset_id = update["asset_id"]
+            order_action = update["order_action"]
+            price = update["price"]
+            size = update["size"]
+            timestamp = update["timestamp"]
+            if self.data_provider.get_current_timestamp() - timestamp >= self.on_chain_delay:
+                if order_action == OrderAction.BID:
+                    self.user_holdings[asset_id] = self.user_holdings.get(asset_id, 0) + size
+                elif order_action == OrderAction.ASK:
+                    self.current_cash += price
+                else:
+                    raise ValueError(f"Unknown order action: {order_action}")
+            else:
+                still_pending_order_matches.append(update)
+        self.order_matches = still_pending_order_matches
 
     def resolve_market(self, final_price, price_to_beat, outcomes, clobTokenIds):
 

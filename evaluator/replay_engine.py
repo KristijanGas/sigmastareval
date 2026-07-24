@@ -227,7 +227,8 @@ class replay_engine:
             "resolution" : resolution,
             "mid_prices" : mid_prices,
             "crypto_prices" : crypto_prices,
-            "past_crypto_predictions" : self.bot.past_crypto_predictions if hasattr(self.bot, 'past_crypto_predictions') else []
+            "past_crypto_predictions" : self.bot.past_crypto_predictions,
+            "on_chain_order_matches": self.market.order_matches #pending payouts that didnt mine on the chain
         }
         return analytics
     @staticmethod
