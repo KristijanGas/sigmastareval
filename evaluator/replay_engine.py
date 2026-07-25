@@ -189,6 +189,7 @@ class replay_engine:
                     skip = 1
             if skip:
                 continue
+            self.data_provider.update_moving_mean()
             asset_ids = self.data_provider.get_market_asset_ids()
             for asset_id in asset_ids:
                 mid_price = self.data_provider.get_mid_price(asset_id)

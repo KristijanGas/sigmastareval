@@ -302,6 +302,17 @@ class market_simulator:
         self.order_matches = still_pending_order_matches
 
     def resolve_market(self, final_price, price_to_beat, outcomes, clobTokenIds):
+        for order_match in self.order_matches:
+            asset_id = order_match["asset_id"]
+            order_action = order_match["order_action"]
+            price = order_match["price"]
+            size = order_match["size"]
+            if order_action == OrderAction.BID:
+                self.user_holdings[asset_id] = self.user_holdings.get(asset_id, 0) + size
+            elif order_action == OrderAction.ASK:    
+                self.current_cash += price
+            else:
+                raise ValueError(f"Unknown order action: {order_action}")
 
         if final_price >= price_to_beat:
             winning_asset = "Up"
@@ -319,6 +330,8 @@ class market_simulator:
         self.user_holdings = {}
         self.orders = []
         self.pending_orders = []
+        self.order_matches = []
+        
         self.order_id_counter = 0
         self.new_order = {}
         print(f"Market resolved. Winning asset: {winning_asset}, Winning asset ID: {winning_token_id}, Final price: {final_price}. User cash: {self.current_cash}")

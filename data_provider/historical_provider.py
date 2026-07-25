@@ -14,6 +14,15 @@ class historical_provider:
         self.down_token_id = None
         self.past_crypto_values = []
         self.current_timestamp = 0
+
+        self.moving_mean_sum = 0.0
+        self.moving_mean_time = 20000
+
+        self.moving_mean_l = 0
+        self.moving_mean_r = 0
+        self.moving_mean_l_time = 0
+        self.moving_mean_r_time = 0
+
         outcome_name_list = json.loads(self.metadata[0]["markets"][0]["outcomes"])
         self.token_ids = json.loads(self.metadata[0]["markets"][0]["clobTokenIds"])
         for i in range(len(outcome_name_list)):
@@ -228,7 +237,10 @@ class historical_provider:
     
     def get_fair_value_down(self):
         return self.fair_value_down
-    
+
+    def get_moving_mean(self):
+        return self.moving_mean
+
     def set_order_book(self, order_book):
         self.order_book = order_book
     
@@ -246,6 +258,16 @@ class historical_provider:
         timestamp_ms = int(dt.timestamp() * 1000)
         self.end_timestamp = timestamp_ms
     
+    def update_moving_mean(self):
+        now = self.get_current_timestamp()
+        start = now - self.moving_mean_time
+
+        values = self.get_past_crypto_values()
+
+        print(self.moving_mean)
+        return self.moving_mean
+
+
     def update_bids(self, asset_id, updated_bids):
         asset = self.get_asset(asset_id)
         for price, size in updated_bids.items():

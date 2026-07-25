@@ -2,10 +2,9 @@ import gzip
 import json
 from pathlib import Path
 import gzip
+import time
 import urllib.request
 
-
-# Assumed to exist elsewhere
 
 DATASETS_DIR = Path("datasets")
 
@@ -48,7 +47,11 @@ def has_required_metadata(metadata_end):
 
 for gz_file in DATASETS_DIR.rglob("*.gz"):
     print(f"Checking {gz_file}")
-
+    newer_than_time = 5 * 24 * 60 * 60  # 5 days in seconds
+    file_creation_date = gz_file.stat().st_ctime
+    if file_creation_date < time.time() - newer_than_time:
+        #print(f"  Skipping {gz_file} (too old)")
+        continue
     try:
         with gzip.open(gz_file, "rt", encoding="utf-8") as f:
             data = json.load(f)
