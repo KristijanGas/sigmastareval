@@ -212,7 +212,7 @@ def draw_graph(analytics: dict, output_path: str | Path | None = None, show: boo
 
 	crypto_timestamps, crypto_values = _series_from_points(crypto_prices, value_key="price")
 	relative_crypto_values = [value - price_to_beat for value in crypto_values]
-	prediction_timestamps, crypto_filtered = _series_from_points(analytics.get("past_crypto_predictions", []), value_key="kalman_filtered_crypto")
+	prediction_timestamps, crypto_filtered = _series_from_points(analytics.get("past_crypto_predictions", []), value_key="moving_mean")
 	relative_crypto_filtered = [value - price_to_beat for value in crypto_filtered]
 
 	if crypto_timestamps and crypto_values:

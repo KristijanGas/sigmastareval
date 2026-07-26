@@ -45,6 +45,14 @@ class live_provider(historical_provider):
         self.up_thread = None
         self.down_thread = None
         self.current_market_name = None
+        self.moving_mean_sum = 0.0
+        self.moving_mean_time = 10000
+        self.moving_mean = None
+
+        self.moving_mean_l = 0
+        self.moving_mean_r = 0
+        self.moving_mean_l_time = 0
+        self.moving_mean_r_time = 0
         #self.run()
 
     def run(self):
@@ -80,6 +88,7 @@ class live_provider(historical_provider):
                 except Exception as e:
                     #print(f"Error setting price to beat: {e}")
                     pass
+                self.update_moving_mean()
                 #time.sleep(0.1)  # Sleep for a second before the next iteration
                 #print(self.get_best_bid(self.up_token_id), self.get_best_bid(self.down_token_id), self.get_best_ask(self.up_token_id), self.get_best_ask(self.down_token_id), self.get_crypto_value(), self.get_price_to_beat(), self.get_current_timestamp(), self.get_end_timestamp())
             #except Exception as e:

@@ -80,3 +80,4 @@ def main():
     passiveEngine.run_bot()
 if __name__ == "__main__":
     main()
+# python3 evaluator/passive_trading_engine.py bot/k_strategy.py bitcoin-up-or-down BTCUSDT hourly

@@ -16,7 +16,8 @@ class historical_provider:
         self.current_timestamp = 0
 
         self.moving_mean_sum = 0.0
-        self.moving_mean_time = 20000
+        self.moving_mean_time = 10000
+        self.moving_mean = None
 
         self.moving_mean_l = 0
         self.moving_mean_r = 0
@@ -260,11 +261,44 @@ class historical_provider:
     
     def update_moving_mean(self):
         now = self.get_current_timestamp()
-        start = now - self.moving_mean_time
-
         values = self.get_past_crypto_values()
+        if self.moving_mean_l_time == 0 and self.get_crypto_value() is not None:
+            self.moving_mean_l_time = now
+            self.moving_mean_r_time = now
+            self.moving_mean_l = len(values) - 1
+            self.moving_mean_r = len(values) - 1
+            self.moving_mean = self.get_crypto_value()
+            return
 
-        print(self.moving_mean)
+        #update behind
+        while self.moving_mean_l + 1 < len(values):
+            if values[self.moving_mean_l + 1]["timestamp"] > now - self.moving_mean_time:
+                time_segment = now - self.moving_mean_time - self.moving_mean_l_time
+                self.moving_mean_sum -= values[self.moving_mean_l]["price"] * time_segment
+                self.moving_mean_l_time = now - self.moving_mean_time
+                break
+            time_segment = values[self.moving_mean_l + 1]["timestamp"] - self.moving_mean_l_time
+            self.moving_mean_sum -= values[self.moving_mean_l]["price"] * time_segment
+            self.moving_mean_l_time = values[self.moving_mean_l + 1]["timestamp"]
+            self.moving_mean_l += 1
+        if self.moving_mean_l_time < now - self.moving_mean_time:
+            time_segment = now - self.moving_mean_time - self.moving_mean_l_time
+            self.moving_mean_sum -= values[self.moving_mean_l]["price"] * time_segment
+            self.moving_mean_l_time = now - self.moving_mean_time
+
+        #update ahead
+        while self.moving_mean_r + 1 < len(values):
+            time_segment = values[self.moving_mean_r + 1]["timestamp"] - self.moving_mean_r_time
+            self.moving_mean_sum += values[self.moving_mean_r]["price"] * time_segment
+            self.moving_mean_r_time = values[self.moving_mean_r + 1]["timestamp"]
+            self.moving_mean_r += 1
+
+        time_segment = now - self.moving_mean_r_time
+        self.moving_mean_sum += self.get_crypto_value() * time_segment
+        self.moving_mean_r_time = now
+
+        self.moving_mean = self.moving_mean_sum / (now - self.moving_mean_l_time)
+        
         return self.moving_mean
 
 

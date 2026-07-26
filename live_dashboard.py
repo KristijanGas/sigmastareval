@@ -79,6 +79,11 @@ class LiveDashboard:
             )
         )
 
+        crypto_mean_curve = crypto_plot.plot(
+            pen=pg.mkPen('m', width=2),
+            name="mean"
+        )
+
         #
         # Market
         #
@@ -130,6 +135,7 @@ class LiveDashboard:
 
                 strike = self.data.get_price_to_beat()
                 crypto = self.data.get_crypto_value()
+                crypto_mean = self.data.get_moving_mean()
 
                 asset_ids = self.data.get_market_asset_ids()
 
@@ -159,7 +165,9 @@ class LiveDashboard:
                     "crypto":
                         math.nan if strike is None
                         else crypto - strike,
-
+                    "crypto_mean":
+                        math.nan if strike is None or crypto_mean is None
+                        else crypto_mean - strike,
                     "up":
                         self._f(up_price),
 
@@ -202,6 +210,7 @@ class LiveDashboard:
                 down_fair = [p["down_fair"] for p in self.history_data]
 
                 crypto = [p["crypto"] for p in self.history_data]
+                crypto_mean = [p["crypto_mean"] for p in self.history_data]
 
                 cash = [p["cash"] for p in self.history_data]
                 net = [p["net"] for p in self.history_data]
@@ -224,6 +233,7 @@ class LiveDashboard:
                 #
 
                 crypto_curve.setData(x, crypto)
+                crypto_mean_curve.setData(x, crypto_mean)
 
                 #
                 # Market
