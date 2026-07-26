@@ -25,7 +25,7 @@ from data_provider.historical_provider import historical_provider
 
 class live_provider(historical_provider):
     def __init__(self, market_slug_base, binance_symbol, market_type , market):
-        self.binance_feed = BinancePriceFeed(binance_symbol)
+        self.binance_feed = BinancePriceFeed(binance_symbol, correct_timestamps=True)
         self.binance_feed.start()
         self.market = market
         self.market_slug_base = market_slug_base
@@ -46,7 +46,7 @@ class live_provider(historical_provider):
         self.down_thread = None
         self.current_market_name = None
         self.moving_mean_sum = 0.0
-        self.moving_mean_time = 10000
+        self.moving_mean_time = 60000
         self.moving_mean = None
 
         self.moving_mean_l = 0
@@ -86,7 +86,8 @@ class live_provider(historical_provider):
                 try:
                     self.set_price_to_beat(self.metadata[0]["eventMetadata"]["priceToBeat"])
                 except Exception as e:
-                    #print(f"Error setting price to beat: {e}")
+                    print(f"Error setting price to beat: {e}")
+                    print(self.metadata[0])
                     pass
                 self.update_moving_mean()
                 #time.sleep(0.1)  # Sleep for a second before the next iteration

@@ -28,12 +28,21 @@ class OrderBookFeed:
         """Processes real-time book frames directly from Polymarket."""
         try:
             data = json.loads(message)
-            
-            event_type = data["event_type"]
-            if event_type == "book" or event_type == "tick_size_change":
-                self._update_shared_book(data)
+
+            # Polymarket often sends a list of events
+            if isinstance(data, list):
+                events = data
+            else:
+                events = [data]
+
+            for event in events:
+                event_type = event.get("event_type")
+
+                if event_type in ("book", "tick_size_change"):
+                    self._update_shared_book(event)
 
         except Exception as e:
+            print(message)
             print(f"Error parsing Polymarket WS frame: {e}")
 
     def _on_open(self, ws):

@@ -192,10 +192,11 @@ class KStrategy(masterbot):
         projected_down_value = 1 - projected_up_value
         self.data_provider.set_fair_value_up(projected_up_value)
         self.data_provider.set_fair_value_down(projected_down_value)
+        moving_mean = self.data_provider.get_moving_mean()
         self.past_crypto_predictions.append({"timestamp": self.data_provider.get_current_timestamp(),
                                               "up_prediction": projected_up_value,
                                               "down_prediction": projected_down_value,
-                                              #"kalman_filtered_crypto": velocity
+                                              "moving_mean": moving_mean
                                               })
 
         edge_up = projected_up_value - self.up_price

@@ -7,8 +7,9 @@ from websocket import WebSocketApp
 
 
 class BinancePriceFeed:
-    def __init__(self, symbol: str):
+    def __init__(self, symbol: str, correct_timestamps = False):
         self.symbol = symbol.upper()
+        self.correct_timestamps = correct_timestamps # instantly convert seconds to milliseconds int timestamps
 
         self._lock = threading.Lock()
         self._buffer = []
@@ -23,7 +24,10 @@ class BinancePriceFeed:
             "price": price,
             "timestamp": datetime.now(ZoneInfo("America/New_York")).timestamp()
         }
-        
+        if self.correct_timestamps:
+            tick["timestamp"] *= 1000
+            tick["timestamp"] = int(tick["timestamp"])
+
         with self._lock:
             if len(self._buffer) == 0 or price != self._buffer[-1]["price"]:
                 self._buffer.append(tick)
