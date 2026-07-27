@@ -136,6 +136,9 @@ class live_provider(historical_provider):
                 self.up_token_id = self.token_ids[i]
             elif outcome_name_list[i] == "Down":
                 self.down_token_id = self.token_ids[i]
+        for token_id in self.token_ids:
+            self.market.set_min_order_size(token_id, self.metadata[0]["markets"][0]["orderMinSize"])
+
         self.order_book_lock = threading.Lock()
         self.up_feed = OrderBookFeed(self.up_token_id, self.order_book, self.order_book_lock)
         self.down_feed = OrderBookFeed(self.down_token_id, self.order_book, self.order_book_lock)
@@ -147,16 +150,6 @@ class live_provider(historical_provider):
         self.down_thread.start()
         while self.order_book is None or len(self.order_book) < 2:
             time.sleep(0.1)
-        for j in range(len(self.order_book)):
-            minsize = None
-            while minsize is None:
-                try:
-                    minsize = self.order_book[j][1][1]["min_order_size"]
-                except KeyError:
-                    print(f"min_order_size not found for asset {self.order_book[j][0]}")
-                    minsize = 5
-            if minsize is not None:
-                self.market.set_min_order_size(self.order_book[j][0], minsize)
         print(f"Set live provider with Up token ID: {self.up_token_id}, Down token ID: {self.down_token_id}, End timestamp: {self.end_timestamp}")
         self.current_market_name = f"{self.market_slug_base}-{time_name}"
 
