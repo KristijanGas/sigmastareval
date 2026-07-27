@@ -127,6 +127,7 @@ class replay_engine:
         for i in range(len(data["all_prices"])):
             if data["all_prices"][i] is not None:
                 data["all_prices"][i]["timestamp"] = int(data["all_prices"][i]["timestamp"] * 1000)
+                data["all_prices"][i]["price"] = float(data["all_prices"][i]["price"])
 
         for asset_id in clobTokenIds:
             mid_prices[asset_id] = []

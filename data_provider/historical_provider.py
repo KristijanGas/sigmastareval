@@ -16,7 +16,7 @@ class historical_provider:
         self.current_timestamp = 0
 
         self.moving_mean_sum = 0.0
-        self.moving_mean_time = 30000
+        self.moving_mean_time = 60000
         self.moving_mean = None
 
         self.moving_mean_l = 0
