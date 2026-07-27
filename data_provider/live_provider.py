@@ -86,8 +86,8 @@ class live_provider(historical_provider):
                 try:
                     self.set_price_to_beat(self.metadata[0]["eventMetadata"]["priceToBeat"])
                 except Exception as e:
-                    print(f"Error setting price to beat: {e}")
-                    print(self.metadata[0])
+                    #print(f"Error setting price to beat: {e}")
+                    #print(self.metadata[0])
                     pass
                 self.update_moving_mean()
                 #time.sleep(0.1)  # Sleep for a second before the next iteration
