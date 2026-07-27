@@ -111,7 +111,6 @@ def draw_graph(analytics: dict, output_path: str | Path | None = None, show: boo
 	holdings_history = analytics.get("holdings_history", []) or []
 	price_to_beat = _coerce_number(analytics.get("price_to_beat"))
 	label_names = analytics.get("asset_labels", {}) or {}
-	#print(len(mid_prices["82783088000004723881141340236382359053519324814032043514559462982683641812561"]), "assets with mid prices")
 	#print(len(crypto_prices), "crypto price points")
 
 	fig, (ax_prices, ax_crypto, ax_holdings) = plt.subplots(
@@ -292,19 +291,24 @@ def draw_graph(analytics: dict, output_path: str | Path | None = None, show: boo
 			ax_holdings_twin.tick_params(axis="y", labelcolor="#444444")
 
 			net_worth = []
+			last_ind = 0
+			cash_ind = 0
 			for timestamp, value in zip(cash_timestamps, cash_values):
 				holdings_values = 0
 				
 				for asset_id in holdings_by_asset:
 					asset_points = holdings_by_asset[asset_id]
 					holdings_value = 0.0
-					for i in range(len(asset_points)):
-						if asset_points[i][0] <= timestamp:
-							holdings_value = asset_points[i][1] * analytics.get("mid_prices", {}).get(asset_id)[i].get("mid_price", 0.0)
+					for i in range(last_ind,len(mid_prices.get(asset_id, []))):
+						#print(asset_points[i][0], timestamp, asset_points[i][0] <= timestamp)
+						if _timestamp_to_datetime(mid_prices.get(asset_id)[i].get("timestamp", 0.0)) <= timestamp:
+							#print(mid_prices.get(asset_id)[i].get("mid_price", 0.0), i)
+							holdings_value = asset_points[cash_ind][1] * mid_prices.get(asset_id)[i].get("mid_price", 0.0)
+							last_ind = i
 						else:
 							holdings_values += holdings_value
 							break
-					
+				cash_ind+=1
 				net_worth.append(holdings_values + value)
 			ax_holdings_twin.plot(
 				cash_timestamps,
@@ -375,7 +379,7 @@ if __name__ == "__main__":
 	if input_path.suffixes[-2:] == [".json", ".gz"]:
 		with gzip.open(input_path, "rt", encoding="utf-8") as handle:
 			analytics = json.load(handle)
-		print(analytics)
+		#print(analytics)
 		# Find the matching backtester analysis file
 		market = input_path.parent.name
 		analysis_dir = Path("tmp") / market
