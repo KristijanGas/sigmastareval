@@ -101,13 +101,12 @@ class passive_market_simulator(market_simulator):
         analytics["matching_delay"] = self.matching_delay
         analytics["on_chain_delay"] = self.on_chain_delay
         analytics["order_timeout"] = self.order_timeout
-
-        self.order_placements.clear()
-        self.transactions.clear()
-        self.holdings_history.clear()
-        self.cash_history.clear()
         unique_hash = uuid.uuid4().hex
         store_path = REPO_ROOT / "live_runs" / "passive" / f"{self.base_name}" / f"{self.base_name}-{self.old_time_name}_{unique_hash}.json.gz"
         os.makedirs(os.path.dirname(store_path), exist_ok=True)
         with gzip.open(store_path, "wt", encoding="utf-8") as f:
             json.dump(analytics, f)
+        self.order_placements.clear()
+        self.transactions.clear()
+        self.holdings_history.clear()
+        self.cash_history.clear()

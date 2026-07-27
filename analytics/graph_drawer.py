@@ -8,7 +8,10 @@ from typing import Any
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
-
+import argparse
+import gzip
+import json
+import re
 
 def _coerce_number(value):
 	if isinstance(value, bool):
@@ -349,17 +352,62 @@ def draw_graph(analytics: dict, output_path: str | Path | None = None, show: boo
 
 
 if __name__ == "__main__":
-	import argparse
-	import json
 
 	parser = argparse.ArgumentParser(description="Draw replay analytics graphs")
-	parser.add_argument("analytics_json", help="Path to a JSON file containing analytics data")
-	parser.add_argument("--output", default="analytics_graph.png", help="Output image path")
-	parser.add_argument("--show", action="store_true", help="Display the plot interactively")
+	parser.add_argument(
+		"analytics_json",
+		help="Path to an analytics JSON or live-run JSON.GZ file",
+	)
+	parser.add_argument(
+		"--output",
+		default="analytics_graph.png",
+		help="Output image path",
+	)
+	parser.add_argument(
+		"--show",
+		action="store_true",
+		help="Display the plot interactively",
+	)
 	args = parser.parse_args()
 
-	with Path(args.analytics_json).open("r", encoding="utf-8") as handle:
-		analytics = json.load(handle)
+	input_path = Path(args.analytics_json)
 
-	result = draw_graph(analytics, output_path=args.output, show=args.show)
+	if input_path.suffixes[-2:] == [".json", ".gz"]:
+		with gzip.open(input_path, "rt", encoding="utf-8") as handle:
+			analytics = json.load(handle)
+		print(analytics)
+		# Find the matching backtester analysis file
+		market = input_path.parent.name
+		analysis_dir = Path("tmp") / market
+
+		# Remove the .json.gz suffix
+		stem = input_path.name[:-len(".json.gz")]
+
+		# Remove an optional trailing "_<32 hex chars>" hash
+		stem = re.sub(r"_[0-9a-fA-F]{32}$", "", stem)
+
+		analysis_path = analysis_dir / f"{stem}.analysis.json"
+
+		if not analysis_path.exists():
+			raise FileNotFoundError(
+			f"Could not find matching analysis file: {analysis_path}"
+			)
+
+		with analysis_path.open("r", encoding="utf-8") as handle:
+			base_analytics = json.load(handle)
+
+		# Override base analytics with whatever exists in the live run
+		base_analytics.update(analytics)
+		analytics = base_analytics
+
+	else:
+		# Standard backtester analytics file
+		with input_path.open("r", encoding="utf-8") as handle:
+			analytics = json.load(handle)
+
+	result = draw_graph(
+	analytics,
+	output_path=args.output,
+	show=args.show,
+	)
 	print(result)
