@@ -14,11 +14,10 @@ class historical_provider:
         self.down_token_id = None
         self.past_crypto_values = []
         self.current_timestamp = 0
+        self.moving_mean_time = 60000
 
         self.moving_mean_sum = 0.0
-        self.moving_mean_time = 60000
         self.moving_mean = None
-
         self.moving_mean_l = 0
         self.moving_mean_r = 0
         self.moving_mean_l_time = 0
@@ -110,7 +109,7 @@ class historical_provider:
         return (bid + ask) / 2
 
     def sell_gain(self, asset_id, amount_to_sell): # sell_gain returns the gain of selling a given amount of shares, based on the current order book
-        bids = self.get_asset(asset_id)["bids"]
+        bids = self.get_asset(asset_id).get("bids", [])
 
         remaining = amount_to_sell
         gain = 0.0
@@ -137,7 +136,7 @@ class historical_provider:
 
 
     def buy_cost(self, asset_id, amount_to_buy): # buy_cost returns the cost of buying a given amount of shares, based on the current order book
-        asks = self.get_asset(asset_id)["asks"]
+        asks = self.get_asset(asset_id).get("asks", [])
 
         remaining = amount_to_buy
         cost = 0.0
@@ -164,7 +163,7 @@ class historical_provider:
 
 
     def can_buy_with(self, asset_id, investment): # can buy_with returns the amount of shares that can be bought with a given investment, based on the current order book
-        asks = self.get_asset(asset_id)["asks"]
+        asks = self.get_asset(asset_id).get("asks", [])
 
         remaining_money = investment
         shares = 0.0
@@ -189,11 +188,11 @@ class historical_provider:
         return shares
 
     def total_bid_liquidity(self, asset_id): # total_bid_liquidity returns the total bid liquidity of an asset, based on the current order book
-        bids = self.get_asset(asset_id)["bids"]
+        bids = self.get_asset(asset_id).get("bids", [])
         return sum(float(level["size"]) for level in bids)
 
     def total_ask_liquidity(self, asset_id): # total_ask_liquidity returns the total ask liquidity of an asset, based on the current order book
-        asks = self.get_asset(asset_id)["asks"]
+        asks = self.get_asset(asset_id).get("asks", [])
         return sum(float(level["size"]) for level in asks)
 
 
@@ -306,14 +305,14 @@ class historical_provider:
     def update_bids(self, asset_id, updated_bids):
         asset = self.get_asset(asset_id)
         for price, size in updated_bids.items():
-            for level in asset["bids"]:
+            for level in asset.get("bids", []):
                 if float(level["price"]) == price:
                     level["size"] = size
                     break
     def update_asks(self, asset_id, updated_asks):
         asset = self.get_asset(asset_id)
         for price, size in updated_asks.items():
-            for level in asset["asks"]:
+            for level in asset.get("asks", []):
                 if float(level["price"]) == price:
                     level["size"] = size
                     break

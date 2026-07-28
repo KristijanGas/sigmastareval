@@ -32,7 +32,7 @@ class PassiveTradingEngine:
         self.market_binance = market_binance
         self.market_type = market_type
         self.old_time_name = None
-        self.market = passive_market_simulator(None, 100, market_slug)
+        self.market = passive_market_simulator(None, 100, market_slug, self.bot)
         self.live_provider = live_provider(self.market_slug, self.market_binance, self.market_type, self.market)
         self.live_thread = threading.Thread(target=self.live_provider.run, daemon=True)
         self.live_thread.start()
@@ -64,7 +64,7 @@ class PassiveTradingEngine:
                 self.old_time_name = time_name
             if self.live_provider.current_market_name is not None and self.live_provider.current_market_name == f"{self.market_slug}-{time_name}":
                 self.bot.run()
-            time.sleep(0.05)
+            time.sleep(0.01)
             #print("cash: ", self.market.get_user_cash())
             #print("holdings: ", self.market.get_user_holdings())
 

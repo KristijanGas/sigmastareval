@@ -45,8 +45,9 @@ class live_provider(historical_provider):
         self.up_thread = None
         self.down_thread = None
         self.current_market_name = None
-        self.moving_mean_sum = 0.0
         self.moving_mean_time = 60000
+
+        self.moving_mean_sum = 0.0
         self.moving_mean = None
 
         self.moving_mean_l = 0
@@ -120,6 +121,12 @@ class live_provider(historical_provider):
 
     def set_market(self, time_name):
         self.set_price_to_beat(self.get_crypto_value())
+        self.moving_mean_sum = 0.0
+        self.moving_mean = None
+        self.moving_mean_l = 0
+        self.moving_mean_r = 0
+        self.moving_mean_l_time = 0
+        self.moving_mean_r_time = 0
         while self.metadata is None:
             try:
                 self.metadata = self.get_metadata(time_name, self.market_slug_base)
@@ -169,6 +176,9 @@ class live_provider(historical_provider):
     
     def get_crypto_value(self):
         return self.binance_feed.get_current_price()
+
+    def consume_crypto_values(self):
+        return self.binance_feed.consume()
 
     def set_end_timestamp(self, end_date):
         dt = datetime.strptime(end_date, "%Y-%m-%dT%H:%M:%SZ")

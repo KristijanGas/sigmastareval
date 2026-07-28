@@ -211,7 +211,7 @@ def draw_graph(analytics: dict, output_path: str | Path | None = None, show: boo
 	ax_prices.set_ylabel("Asset price")
 	ax_prices.set_title("Market replay: prices, orders, and holdings")
 	ax_prices.grid(True, alpha=0.18)
-
+	price_to_beat = 63921.155
 	crypto_timestamps, crypto_values = _series_from_points(crypto_prices, value_key="price")
 	relative_crypto_values = [value - price_to_beat for value in crypto_values]
 	prediction_timestamps, crypto_filtered = _series_from_points(analytics.get("past_crypto_predictions", []), value_key="moving_mean")
@@ -391,18 +391,17 @@ if __name__ == "__main__":
 		stem = re.sub(r"_[0-9a-fA-F]{32}$", "", stem)
 
 		analysis_path = analysis_dir / f"{stem}.analysis.json"
-
-		if not analysis_path.exists():
-			raise FileNotFoundError(
-			f"Could not find matching analysis file: {analysis_path}"
-			)
 		print(analysis_path)
-		with analysis_path.open("r", encoding="utf-8") as handle:
-			base_analytics = json.load(handle)
+		print(analytics["holdings_history"])
+		if not analysis_path.exists():
+			print("Could not find same replay engine analysis file")
+		else:
+			with analysis_path.open("r", encoding="utf-8") as handle:
+				base_analytics = json.load(handle)
 
-		# Override base analytics with whatever exists in the live run
-		base_analytics.update(analytics)
-		analytics = base_analytics
+			# Override base analytics with whatever exists in the live run
+			base_analytics.update(analytics)
+			analytics = base_analytics
 
 	else:
 		# Standard backtester analytics file
