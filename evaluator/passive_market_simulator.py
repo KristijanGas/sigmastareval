@@ -68,7 +68,7 @@ class passive_market_simulator(market_simulator):
                         self.store_analytics(resolution)
                         self.old_time_name = time_name
                         break
-                print(self.get_user_holdings())
+                #print(self.get_user_holdings())
                 current_timestamp = self.data_provider.get_current_timestamp()
                 asset_ids = self.data_provider.get_market_asset_ids()
                 self.holdings_history.append(
