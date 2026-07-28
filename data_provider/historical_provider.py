@@ -81,15 +81,15 @@ class historical_provider:
         raise KeyError(f"Asset {asset_id} not found")
 
     def get_best_bid(self, asset_id):
-        bids = self.get_asset(asset_id)["bids"]
-        if not bids:
+        bids = self.get_asset(asset_id).get("bids", [])
+        if not bids or bids == []:
             return 0
         return float(bids[-1]["price"])
 
 
     def get_best_ask(self, asset_id):
-        asks = self.get_asset(asset_id)["asks"]
-        if not asks:
+        asks = self.get_asset(asset_id).get("asks", [])
+        if not asks or asks == []:
             return 1
         return float(asks[-1]["price"])
 

@@ -396,7 +396,7 @@ if __name__ == "__main__":
 			raise FileNotFoundError(
 			f"Could not find matching analysis file: {analysis_path}"
 			)
-
+		print(analysis_path)
 		with analysis_path.open("r", encoding="utf-8") as handle:
 			base_analytics = json.load(handle)
 

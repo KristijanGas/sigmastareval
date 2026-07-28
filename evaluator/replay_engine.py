@@ -92,9 +92,6 @@ class replay_engine:
         correctly_initialized = self.initialize_environment(starting_cash, data, filename)
         if not correctly_initialized:
             return None
-        order_library_size = len(data["all_clobs"])
-        binance_lookups_size = len(data["all_prices"])
-        #print(f"Order library size: {order_library_size}, Binance lookups size: {binance_lookups_size}")
         outcomes = json.loads(data["metadata_end"][0]["markets"][0]["outcomes"])
         clobTokenIds = json.loads(data["metadata_end"][0]["markets"][0]["clobTokenIds"])
         if len(outcomes) != 2:
@@ -131,6 +128,7 @@ class replay_engine:
 
         for asset_id in clobTokenIds:
             mid_prices[asset_id] = []
+            self.market.set_min_order_size(asset_id, data["metadata_start"][0]["markets"][0]["orderMinSize"])
         crypto_index = 0
         book_never_set = True
         crypto_never_set = True
@@ -163,9 +161,6 @@ class replay_engine:
                     order_book = data["all_clobs"][book_index]
                     self.data_provider.set_order_book(order_book)
                     book_never_set = False
-                    for asset in order_book:
-                        if asset[1] is not None:
-                            self.market.set_min_order_size(asset[0], asset[1]["min_order_size"])
                     book_index += 1
 
             while crypto_index < len(data["all_prices"]):
