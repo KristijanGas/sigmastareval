@@ -190,14 +190,14 @@ class live_provider(historical_provider):
     def update_bids(self, asset_id, updated_bids):
         asset = self.get_asset(asset_id)
         for price, size in updated_bids.items():
-            for level in asset["bids"]:
+            for level in asset.get("bids", []):
                 if float(level["price"]) == price:
                     level["size"] = size
                     break
     def update_asks(self, asset_id, updated_asks):
         asset = self.get_asset(asset_id)
         for price, size in updated_asks.items():
-            for level in asset["asks"]:
+            for level in asset.get("asks", []):
                 if float(level["price"]) == price:
                     level["size"] = size
                     break
