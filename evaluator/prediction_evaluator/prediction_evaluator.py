@@ -1,31 +1,37 @@
 
 #from predictors import MultiWindowMomentumPredictor, RegressionMomentumPredictor, MultiWindowRegressionPredictor
-
-from collections import deque
-from dataclasses import dataclass
-from prediction_eval_dataclasses import MarketSnapshot, PredictionObservation, MarketAssets
-from future_target_matcher import FutureTargetMatcher
-from snapshot_builder import SnapshotBuilder
-from typing import Any, Iterable, Sequence
-from datetime import datetime
 from pathlib import Path
 import json
 import sys
 import gzip
-import numpy as np
-from sklearn.ensemble import HistGradientBoostingRegressor
+import joblib
+
 
 if __package__ is None or __package__ == "":
     repo_root = Path(__file__).resolve().parents[2]
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
-
+    
 REPO_ROOT = Path(__file__).resolve().parents[2]
+from collections import deque
+from dataclasses import dataclass
 
-from bot.prediction_models.linear_predictor import LinearPredictor
-from bot.prediction_models.multi_window_linear_predictor import MultiWindowLinearPredictor
-from bot.prediction_models.linear_regression_predictor import LinearRegressionPredictor
-from bot.prediction_models.multi_window_regression_predictor import MultiWindowRegressionPredictor
+from typing import Any, Iterable, Sequence
+from datetime import datetime
+
+import numpy as np
+from sklearn.ensemble import HistGradientBoostingRegressor
+
+
+from evaluator.prediction_evaluator.future_target_matcher import FutureTargetMatcher
+from evaluator.prediction_evaluator.snapshot_builder import SnapshotBuilder
+
+from evaluator.prediction_evaluator.prediction_eval_dataclasses import MarketSnapshot, PredictionObservation, MarketAssets
+
+# bot.prediction_models.linear_predictor import LinearPredictor
+#from bot.prediction_models.multi_window_linear_predictor import MultiWindowLinearPredictor
+# bot.prediction_models.linear_regression_predictor import LinearRegressionPredictor
+#from bot.prediction_models.multi_window_regression_predictor import MultiWindowRegressionPredictor
 from bot.prediction_models.gradient_boosting_predictor import GradientBoostingPredictor
 from evaluator.prediction_evaluator.feature_extractor import MarketFeatureExtractor
 
@@ -45,7 +51,7 @@ class PredictionEvaluator:
 
             observations.extend(resolved)
 
-            prediction = self.predictor.update(snapshot) #creates a new prediction using only data available up to this snapshot
+            prediction = self.predictor.update_and_predict(snapshot) #creates a new prediction using only data available up to this snapshot
             if prediction is not None:
                 self.target_matcher.add_prediction(prediction)
 
@@ -122,9 +128,9 @@ def mae(observations: list[PredictionObservation]):
     
     errors = []
     for observation in observations:
-        if observation.actual_midpoint is None or observation.predicted_midpoint is None:
+        if observation.actual_value is None or observation.predicted_value is None:
             continue
-        errors.append(abs(observation.actual_midpoint - observation.predicted_midpoint))
+        errors.append(abs(observation.actual_value - observation.predicted_value))
 
     return(sum(errors) / len(observations))
 
@@ -150,12 +156,12 @@ def plot_prediction_observations(observations):
     ]
 
     predicted = [
-        observation.predicted_midpoint
+        observation.predicted_value
         for observation in observations
     ]
 
     actual = [
-        observation.actual_midpoint
+        observation.actual_value
         for observation in observations
     ]
 
@@ -164,20 +170,20 @@ def plot_prediction_observations(observations):
     ax.plot(
         timestamps,
         predicted,
-        label="Predicted midpoint",
+        label="Predicted value",
         linewidth=2
     )
 
     ax.plot(
         timestamps,
         actual,
-        label="Actual midpoint",
+        label="Actual value",
         linewidth=2
     )
 
-    ax.set_title("Predicted vs Actual Midpoints")
+    ax.set_title("Predicted vs Actual Values")
     ax.set_xlabel("Actual timestamp")
-    ax.set_ylabel("Midpoint")
+    ax.set_ylabel("Value") #make dynamic names
     ax.set_ylim(0, 1)
 
     ax.grid(alpha=0.3)
@@ -193,18 +199,18 @@ def plot_prediction_accuracy(observations):
         observation
         for observation in observations
         if (
-            observation.predicted_midpoint is not None
-            and observation.actual_midpoint is not None
+            observation.predicted_value is not None
+            and observation.actual_value is not None
         )
     ]
 
     predicted = [
-        observation.predicted_midpoint
+        observation.predicted_value
         for observation in valid
     ]
 
     actual = [
-        observation.actual_midpoint
+        observation.actual_value
         for observation in valid
     ]
 
@@ -214,8 +220,8 @@ def plot_prediction_accuracy(observations):
     ax.plot([0, 1], [0, 1], linestyle="--", label="Perfect prediction")
 
     ax.set_title("Prediction Accuracy")
-    ax.set_xlabel("Predicted midpoint")
-    ax.set_ylabel("Actual midpoint")
+    ax.set_xlabel("Predicted value")
+    ax.set_ylabel("Actual value")
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
     ax.grid(alpha=0.3)
@@ -250,8 +256,90 @@ def prepare_market_snapshots(data):
 @dataclass
 class PendingTrainingRow:
     prediction_timestamp: int
-    current_midpoint: float
+    current_value: float
     feature_values: tuple[float, ...]
+
+def create_training_samples_trend(
+    snapshots: Sequence[MarketSnapshot],
+    feature_extractor: MarketFeatureExtractor,
+    feature_names: Sequence[str],
+    horizon_ms: int,
+    max_target_delay_ms: int | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    feature_names = tuple(feature_names)
+    feature_extractor.reset()
+    pending: deque[PendingTrainingRow] = deque()
+
+    X_rows: list[tuple[float, ...]] = []
+    y_values: list[float] = []
+
+    for index, snapshot in enumerate(snapshots):
+        type(snapshot)
+        if not isinstance(snapshot, MarketSnapshot):
+            print(index)
+            print(len(snapshot))
+            print(type(snapshot).__name__)
+            # raise TypeError(
+            #     f"Expected MarketSnapshot at index {index}, "
+            #     f"got {type(snapshot).__name__}: "
+            #     f"{snapshot!r}"
+            # )
+        
+        current_crypto_price = snapshot.crypto_price
+
+        if current_crypto_price is None:
+            continue
+
+        # Resolve previous feature rows whose targets have arrived
+        while pending:
+            oldest = pending[0]
+
+            requested_target_timestamp = oldest.prediction_timestamp + horizon_ms
+            if snapshot.timestamp < requested_target_timestamp:
+                break
+
+            pending.popleft()
+
+            target_delay_ms = snapshot.timestamp - requested_target_timestamp
+
+            if (max_target_delay_ms is not None
+                and target_delay_ms > max_target_delay_ms):
+                continue
+
+            #actual value
+            future_change = current_crypto_price - oldest.current_value
+            
+            X_rows.append(oldest.feature_values)
+            y_values.append(future_change)
+
+        extracted = feature_extractor.update_and_extract(snapshot)
+
+        if extracted is None:
+            continue
+
+        if not extracted.features.has_all(feature_names):
+            continue
+
+        pending.append(
+            PendingTrainingRow(
+                prediction_timestamp=extracted.timestamp,
+                current_value=extracted.current_crypto_price,
+                feature_values=extracted.features.select_values(feature_names),
+            )
+        )
+
+    feature_count = len(feature_names)
+
+    if not X_rows:
+        return (
+            np.empty(shape=(0, feature_count), dtype=float,),
+            np.empty(shape=(0,), dtype=float,),
+        )
+
+    return (
+        np.asarray(X_rows, dtype=float),
+        np.asarray(y_values, dtype=float),
+    )
 
 
 def create_training_samples(
@@ -302,15 +390,17 @@ def create_training_samples(
                 continue
 
             #actual value
-            future_change = current_midpoint - oldest.current_midpoint
-            
+            future_change = current_midpoint - oldest.current_value
+
             X_rows.append(oldest.feature_values)
             y_values.append(future_change)
 
-        extracted = feature_extractor.update(snapshot)
+        extracted = feature_extractor.update_and_extract(snapshot)
 
         if extracted is None:
             continue
+        else:
+            print(extracted)
 
         if not extracted.features.has_all(feature_names):
             continue
@@ -318,7 +408,7 @@ def create_training_samples(
         pending.append(
             PendingTrainingRow(
                 prediction_timestamp=extracted.timestamp,
-                current_midpoint=extracted.current_midpoint,
+                current_value=extracted.current_midpoint,
                 feature_values=extracted.features.select_values(feature_names),
             )
         )
@@ -349,7 +439,15 @@ def create_training_dataset(
     for snapshots in markets:
         extractor = feature_extractor
 
-        X_market, y_market = create_training_samples(
+        # X_market, y_market = create_training_samples(
+        #     snapshots=snapshots,
+        #     feature_extractor=extractor,
+        #     feature_names=feature_names,
+        #     horizon_ms=horizon_ms,
+        #     max_target_delay_ms=max_target_delay_ms
+        # )
+
+        X_market, y_market = create_training_samples_trend(
             snapshots=snapshots,
             feature_extractor=extractor,
             feature_names=feature_names,
@@ -359,7 +457,7 @@ def create_training_dataset(
 
         if len(X_market) == 0:
             continue
-
+            
         X_parts.append(X_market)
         y_parts.append(y_market)
 
@@ -379,7 +477,7 @@ def generate_test_and_train_data(dataset_paths):
     count = 0.0
     for dataset in dataset_paths:
         for data_file in Path(dataset).glob("*.gz"):
-            if count/length >= 0.7:
+            if count/length >= 0.2:
                 test_paths.append(data_file)
                 count += 1
             else:
@@ -391,15 +489,21 @@ def generate_test_and_train_data(dataset_paths):
                     count += 1
     return test_paths, train_snapshots
 
-def start_training_and_evaluation(predictor, training_dataset, test_paths):
+def get_test_paths(dataset_paths):
+    test_paths = []
+    for dataset in dataset_paths:
+        for data_file in Path(dataset).glob("*.gz"):
+            test_paths.append(data_file)
+            
+    return test_paths
+
+def start_evaluation(predictor, test_paths):
     for data_file in test_paths:
         print(f"Found data file: {data_file}")
         file = data_file.resolve()
         with gzip.open(file, "rt", encoding="utf-8") as f:
             data = json.load(f)
 
-            #predictor = LinearPredictor()
-            #predictor = MultiWindowRegressionPredictor(training_dataset)
             target_matcher = FutureTargetMatcher()
             evaluator = PredictionEvaluator(
                 predictor=predictor,
@@ -416,76 +520,55 @@ def start_training_and_evaluation(predictor, training_dataset, test_paths):
                 observation = observations[i]
                 print(
                     f"Prediction at {observation.prediction_timestamp}: "
-                    f"current={observation.current_midpoint:.4f}, "
-                    f"predicted={observation.predicted_midpoint:.4f}, "
-                    f"actual={observation.actual_midpoint:.4f}, "
+                    #f"current={observation.current_value:.4f}, "
+                    f"predicted={observation.predicted_value:.4f}, "
+                    f"actual={observation.actual_value:.4f}, "
                     f"actual timestamp={observation.actual_timestamp}, "
                 )
     plot_prediction_observations(observations)
     plot_prediction_accuracy(observations)
 
 
-def start_evaluation(dataset_paths):
-    files = []
-    for dataset in dataset_paths:
-        for data_file in Path(dataset).glob("*.gz"):
-            print(f"Found data file: {data_file}")
-            file = data_file.resolve()
-            with gzip.open(file, "rt", encoding="utf-8") as f:
-                data = json.load(f)
-
-                predictor = LinearPredictor()
-                target_matcher = FutureTargetMatcher()
-                evaluator = PredictionEvaluator(
-                    predictor=predictor,
-                    target_matcher=target_matcher
-                )
-                market_snapshots = prepare_market_snapshots(data)
-
-                observations = evaluator.evaluate_market(market_snapshots)
-
-                print("Observations:", len(observations))
-                print("MAE:", mae(observations))
-
-
-                for i in range(5):
-                    observation = observations[i]
-                    print(
-                        f"Prediction at {observation.prediction_timestamp}: "
-                        f"current={observation.current_midpoint:.4f}, "
-                        f"predicted={observation.predicted_midpoint:.4f}, "
-                        f"actual={observation.actual_midpoint:.4f}, "
-                        f"actual timestamp={observation.actual_timestamp}, "
-                   )
-        plot_prediction_observations(observations)
-        plot_prediction_accuracy(observations)
-
-
 def main():
     print("start")
+    # GRADIENT_BOOSTING_FEATURES = (
+    #     "current_midpoint",
+
+    #     "midpoint_momentum_3000",
+    #     "midpoint_momentum_8000",
+    #     "midpoint_momentum_18000",
+
+    #     "spread",
+
+    #     "imbalance_top_1",
+    #     "imbalance_top_3",
+    #     "imbalance_top_5",
+
+    #     "bid_volume_top_5",
+    #     "ask_volume_top_5",
+
+    #     "binance_return_3000",
+    #     "binance_return_10000",
+    #     "binance_return_30000",
+
+    #     "relative_distance_to_price_to_beat",
+    #     "seconds_remaining",
+    # )
+
     GRADIENT_BOOSTING_FEATURES = (
-        "current_midpoint",
-
-        "midpoint_momentum_3000",
-        "midpoint_momentum_8000",
-        "midpoint_momentum_18000",
-
-        "spread",
-
-        "imbalance_top_1",
-        "imbalance_top_3",
-        "imbalance_top_5",
-
-        "bid_volume_top_5",
-        "ask_volume_top_5",
-
+        "binance_return_1000",
         "binance_return_3000",
-        "binance_return_10000",
-        "binance_return_30000",
-
-        "relative_distance_to_price_to_beat",
-        "seconds_remaining",
-    )
+        #"binance_range_position_5000",
+        #"binance_range_position_15000",
+        #"binance_range_position_30000",
+        #"binance_return_volatility_10000",
+        #"binance_return_volatility_20000",
+        #"binance_relative_high_distance_5000",
+        #"binance_relative_low_distance_5000",
+        #"binance_range_position_7000"
+        #"binance_return_3500",
+        #"binance_acceleration_1s_5s",
+    )  
 
     predictor_path = sys.argv[1]
     dataset_paths = sys.argv[2:]
@@ -495,37 +578,36 @@ def main():
     if training_required:
         test_paths, train_snapshots = generate_test_and_train_data(dataset_paths)
 
-        model = HistGradientBoostingRegressor(
-            learning_rate=0.05,
-            max_iter=300,
-            max_leaf_nodes=31,
-            min_samples_leaf=50,
-            l2_regularization=0.1,
-            random_state=42,
-        )
-
         training_samples = create_training_dataset(
             markets=train_snapshots,
-            feature_extractor=MarketFeatureExtractor(),
+            feature_extractor=MarketFeatureExtractor(binance_lookbacks_ms=(1000,3000,3500),
+                                                     crypto_range_windows_ms=(5000,15000, 30000)),
+            #feature_extractor=MarketFeatureExtractor(),
             feature_names=GRADIENT_BOOSTING_FEATURES,
-            horizon_ms=1000,
-            max_target_delay_ms=2000,
+            horizon_ms=3000,
+            max_target_delay_ms=1000,
         )
-
+        #model = joblib.load("bot/trained_models/trend_model_btc2.joblib")
+        #model = joblib.load("bot/trained_models/trend_model_btc.joblib")
         predictor = GradientBoostingPredictor(
             model=None,
-            feature_extractor=MarketFeatureExtractor(),
-            horizon_ms=1000,
+            feature_extractor=MarketFeatureExtractor(binance_lookbacks_ms=(1000,3000,3500),
+                                                     crypto_range_windows_ms=(5000,15000,30000)),
+            #feature_extractor=MarketFeatureExtractor(),
+            horizon_ms=3000,
+            #target_name="midpoint_change",
+            target_name="normalized_crypto_trend",
             gradient_boosting_features=GRADIENT_BOOSTING_FEATURES,
-            training_samples=training_samples
+            training_samples=training_samples,
+            market_name="xrp-up-or-down",
         )
-
-        start_training_and_evaluation(predictor, training_dataset=train_snapshots, 
-            test_paths=test_paths)
+        joblib.dump(predictor.model, "bot/trained_models/trend_model_xrp.joblib")
+        start_evaluation(predictor, test_paths=test_paths)
     else:
-        start_evaluation(dataset_paths=dataset_paths)
+        test_paths=get_test_paths(dataset_paths=dataset_paths)
+        start_evaluation(predictor=None, test_paths=test_paths)
 
     
 
 
-main()
+#main()

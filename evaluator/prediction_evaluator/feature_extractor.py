@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Iterable, Sequence
 from collections import deque
+import statistics
 
 from evaluator.prediction_evaluator.prediction_eval_dataclasses import MarketSnapshot
 
@@ -37,6 +38,7 @@ class ExtractedFeatures:
 class ExtractedMarketState:
     timestamp: int
     current_midpoint: float
+    current_crypto_price: float | None
     features: ExtractedFeatures
 
 
@@ -46,6 +48,9 @@ class MarketFeatureExtractor:
       midpoint_lookbacks_ms: Sequence[int] = (3000, 8000, 18000),
       binance_lookbacks_ms: Sequence[int] = (3000, 10000, 30000),
       imbalance_levels: Sequence[int] = (1,3,5),
+      crypto_range_windows_ms: Sequence[int] = (10000, 30000),
+      binance_volatility_windows_ms=(10000, 20000),
+
       max_lookup_delay_ms = 5000):
          self.midpoint_lookbacks_ms = self._validate_windows(
                midpoint_lookbacks_ms,
@@ -61,12 +66,23 @@ class MarketFeatureExtractor:
 
          if any(level <= 0 for level in self.imbalance_levels):
                raise ValueError("All imbalance levels must be positive.")
+         
+         self.crypto_range_windows_ms = self._validate_windows(
+            crypto_range_windows_ms,
+            "crypto_range_windows_ms",
+         )
+
+         self.binance_volatility_windows_ms = self._validate_windows(
+               binance_volatility_windows_ms,
+               "binance_volatility_windows_ms",
+         )
 
          if (max_lookup_delay_ms is not None and max_lookup_delay_ms < 0):
                raise ValueError("max_lookup_delay_ms cannot be negative.")
 
          self.max_lookup_delay_ms = max_lookup_delay_ms
-         all_lookbacks = (self.midpoint_lookbacks_ms+ self.binance_lookbacks_ms)
+         all_lookbacks = (self.midpoint_lookbacks_ms + self.binance_lookbacks_ms
+               + self.crypto_range_windows_ms + self.binance_volatility_windows_ms)
 
          self.maximum_lookback_ms = (max(all_lookbacks) if all_lookbacks else 0)
 
@@ -90,7 +106,56 @@ class MarketFeatureExtractor:
       if current_midpoint is None:
          return None
 
-      self._validate_snapshot(snapshot)
+      try:
+         self._validate_snapshot(snapshot)
+      except ValueError:
+         return None
+      self.past_snapshots.append(snapshot)
+
+      if self.maximum_lookback_ms > 0:
+         oldest_required_timestamp = (snapshot.timestamp - self.maximum_lookback_ms)
+         self._remove_old_snapshots(oldest_required_timestamp)
+
+      # values: dict[str, float] = {"current_midpoint": current_midpoint}
+
+      # self._add_midpoint_features(snapshot=snapshot, values=values)
+      # self._add_orderbook_features(snapshot=snapshot, values=values)
+      # self._add_binance_features(snapshot=snapshot, values=values)
+      # self._add_market_context_features(snapshot=snapshot, values=values)
+
+      # return ExtractedMarketState(
+      #    timestamp=snapshot.timestamp,
+      #    current_midpoint=current_midpoint,
+      #    current_crypto_price=snapshot.crypto_price,
+      #    features=ExtractedFeatures(values=values),
+      # )
+   
+   def extract_market_features(self, snapshot: MarketSnapshot):
+      current_midpoint = snapshot.up_book.midpoint
+      values: dict[str, float] = {"current_midpoint": current_midpoint}
+
+      self._add_midpoint_features(snapshot=snapshot, values=values)
+      self._add_orderbook_features(snapshot=snapshot, values=values)
+      self._add_binance_features(snapshot=snapshot, values=values)
+      self._add_market_context_features(snapshot=snapshot, values=values)
+
+      return ExtractedMarketState(
+         timestamp=snapshot.timestamp,
+         current_midpoint=current_midpoint,
+         current_crypto_price=snapshot.crypto_price,
+         features=ExtractedFeatures(values=values),
+      )
+   
+   def update_and_extract(self, snapshot: MarketSnapshot):
+      current_midpoint = snapshot.up_book.midpoint
+
+      if current_midpoint is None:
+         return None
+
+      try:
+         self._validate_snapshot(snapshot)
+      except ValueError:
+         return None
       self.past_snapshots.append(snapshot)
 
       if self.maximum_lookback_ms > 0:
@@ -107,6 +172,7 @@ class MarketFeatureExtractor:
       return ExtractedMarketState(
          timestamp=snapshot.timestamp,
          current_midpoint=current_midpoint,
+         current_crypto_price=snapshot.crypto_price,
          features=ExtractedFeatures(values=values),
       )
    
@@ -193,6 +259,138 @@ class MarketFeatureExtractor:
          values[f"binance_return_{lookback_ms}"] = float(simple_return)
          values[f"binance_change_{lookback_ms}"] = float(absolute_change)
 
+
+      short_return = values.get("binance_return_1000")
+      long_return = values.get("binance_return_5000")
+      #print(short_return)
+      if short_return is not None and long_return is not None:
+         values["binance_acceleration_1s_5s"] = (
+            short_return - long_return
+         )
+
+      self.add_crypto_range_features(snapshot=snapshot, 
+                                     current_price=current_binance_price,
+                                     values=values)
+      self._add_crypto_volatility_features(
+         snapshot=snapshot,
+         values=values,
+      )
+
+   def _crypto_observations_in_window(self, current_timestamp: int,
+      window_ms: int) -> list[tuple[int, float]]:
+      start_timestamp = current_timestamp - window_ms
+      observations: list[tuple[int, float]] = []
+
+      for historical_snapshot in self.past_snapshots:
+         if historical_snapshot.timestamp < start_timestamp:
+               continue
+
+         if historical_snapshot.timestamp > current_timestamp:
+               break
+
+         price = historical_snapshot.crypto_price
+         if price is None or price <= 0:
+               continue
+
+         observations.append((historical_snapshot.timestamp, float(price)))
+               
+      return observations
+
+
+
+
+   def _add_crypto_volatility_features(self, snapshot: MarketSnapshot,
+      values: dict[str, float]) -> None:
+      for window_ms in self.binance_volatility_windows_ms:
+         observations = self._crypto_observations_in_window(
+               current_timestamp=snapshot.timestamp,
+               window_ms=window_ms)
+
+         # at least three prices needed for two changes
+         if len(observations) < 3:
+               continue
+
+         prices = [price for _, price in observations]
+
+         absolute_changes = [
+               prices[index] - prices[index - 1]
+               for index in range(1, len(prices))
+         ]
+
+         returns = [
+               (
+                  prices[index] - prices[index - 1]
+               ) / prices[index - 1]
+               for index in range(1, len(prices))
+         ]
+
+         if len(absolute_changes) >= 2:
+               values[
+                  f"binance_change_volatility_{window_ms}"
+               ] = float(
+                  statistics.stdev(absolute_changes)
+               )
+
+               values[
+                  f"binance_return_volatility_{window_ms}"
+               ] = float(
+                  statistics.stdev(returns)
+               )
+      
+
+   def add_crypto_range_features(self, snapshot:MarketSnapshot, current_price:float,
+         values: dict[str, float]):
+      for window_ms in self.crypto_range_windows_ms:
+         prices = self._crypto_prices_in_window(
+               current_timestamp=snapshot.timestamp,
+               window_ms=window_ms,
+         )
+         if not prices:
+               continue
+
+         recent_high = max(prices)
+         recent_low = min(prices)
+         values[f"binance_recent_high_{window_ms}"] = float(recent_high)
+         values[f"binance_recent_low_{window_ms}"] = float(recent_low)
+         # values[f"binance_recent_high_distance_{window_ms}"
+         #    ] = float(current_price - recent_high)
+         # values[f"binance_recent_low_distance_{window_ms}"
+         #    ] = float(current_price - recent_low)
+         if recent_high > 0:
+            values[f"binance_relative_high_distance_{window_ms}"
+            ] = float((current_price - recent_high) / recent_high)
+         
+         if recent_low > 0:
+            values[f"binance_relative_low_distance_{window_ms}"
+            ] = float((current_price - recent_low) / recent_low)
+
+         recent_range = recent_high - recent_low
+         if recent_range > 0:
+               values[f"binance_range_position_{window_ms}"
+               ] = float((current_price - recent_low) / recent_range)
+
+   def _crypto_prices_in_window(self, current_timestamp: int,
+      window_ms: int,) -> list[float]:
+
+      start_timestamp = current_timestamp - window_ms
+      prices: list[float] = []
+
+      for historical_snapshot in self.past_snapshots:
+         if historical_snapshot.timestamp < start_timestamp:
+               continue
+
+         if historical_snapshot.timestamp > current_timestamp:
+               break
+
+         price = historical_snapshot.crypto_price
+         if price is None or price <= 0:
+               continue
+
+         prices.append(float(price))
+
+      return prices
+
+
    def _add_market_context_features(self, snapshot: MarketSnapshot, values: dict[str, float]):
       binance_price = snapshot.crypto_price
       price_to_beat = snapshot.price_to_beat
@@ -255,8 +453,12 @@ class MarketFeatureExtractor:
       if not 0.0 <= midpoint <= 1.0:
          raise ValueError(f"Midpoint must be between 0 and 1, got {midpoint}.")
 
+      #if (self.past_snapshots
+            #and snapshot.timestamp < self.past_snapshots[-1].timestamp):
       if (self.past_snapshots
-            and snapshot.timestamp < self.past_snapshots[-1].timestamp):
+            and self.past_snapshots[-1].timestamp - snapshot.timestamp > 80):
+         print(snapshot.timestamp)
+         print(self.past_snapshots[-1].timestamp)
          raise ValueError("Snapshots must arrive in chronological order.")
 
 
