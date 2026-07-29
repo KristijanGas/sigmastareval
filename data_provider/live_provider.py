@@ -43,6 +43,7 @@ class live_provider(historical_provider):
         self.fair_value_down = None
         self.fair_value_up = None
         self.order_book_feed = None
+        self.order_book_feed_thread = None
         self.current_market_name = None
         self.moving_mean_time = 60000
 
@@ -72,9 +73,9 @@ class live_provider(historical_provider):
                     self.up_token_id = None
                     self.down_token_id = None
                     self.token_ids = None
-                    if self.order_book_feed is not None and self.order_book_feed.is_alive():
+                    if self.order_book_feed_thread is not None and self.order_book_feed_thread.is_alive():
                         self.order_book_feed.stop()
-                        self.order_book_feed.join()
+                        self.order_book_feed_thread.join()
 
                     self.set_market(time_name)
                     #self.binance_feed.consume()
@@ -146,8 +147,8 @@ class live_provider(historical_provider):
         self.order_book_feed = OrderBookFeed([self.up_token_id, self.down_token_id], self.order_book, self.order_book_lock)
 
         # start threads
-        self.order_book_feed = threading.Thread(target=self.order_book_feed.run, daemon=True)
-        self.order_book_feed.start()
+        self.order_book_feed_thread = threading.Thread(target=self.order_book_feed.run, daemon=True)
+        self.order_book_feed_thread.start()
         while self.order_book is None or len(self.order_book) < 2:
             time.sleep(0.1)
         print(f"Set live provider with Up token ID: {self.up_token_id}, Down token ID: {self.down_token_id}, End timestamp: {self.end_timestamp}")
