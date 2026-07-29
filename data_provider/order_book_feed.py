@@ -28,8 +28,53 @@ class OrderBookFeed:
         with self._lock:
             for i in range(len(self.order_book)):
                 if self.order_book[i][0] == price_change["asset_id"]:
-                    print(self.order_book[i][1], price_change)
+                    new_price = round(float(price_change["price"]), 5)
+                    new_size = round(float(price_change["size"]), 5)
+                    found = False
+                    
+                    if price_change["side"] == 'SELL':
+                        all_asks = self.order_book[i][1].setdefault("asks", [])
+                        for j in range(len(all_asks)):
+                            ask_price = round(float(all_asks[j]["price"]), 5)
+                            prev_ask_price = round(float(all_asks[j - 1]["price"]), 5) if j > 0 else 1.0
+                            if ask_price == new_price:
+                                if new_size > 0.0:
+                                    all_asks[j]["size"] = new_size
+                                else:
+                                    all_asks.pop(j)
+                                found = True
+                                break
+                            elif new_price > prev_ask_price and new_price < ask_price:
+                                if new_size > 0.0:
+                                    all_asks.insert(j, {"price": new_price, "size": new_size})
+                                    found = True
+                                break
+                                
+                        if not found and new_size > 0.0:
+                            all_asks.append({"price": new_price, "size": new_size})
 
+                    else:  # BUY Side
+                        all_bids = self.order_book[i][1].setdefault("bids", [])
+                        for j in range(len(all_bids)):
+                            bid_price = round(float(all_bids[j]["price"]), 5)
+                            prev_bid_price = round(float(all_bids[j - 1]["price"]), 5) if j > 0 else 0.0
+                            if bid_price == new_price:
+                                if new_size > 0.0:
+                                    all_bids[j]["size"] = new_size
+                                else:
+                                    all_bids.pop(j)
+                                found = True
+                                break
+                            elif new_price > prev_bid_price and new_price < bid_price:
+                                if new_size > 0.0:
+                                    all_bids.insert(j, {"price": new_price, "size": new_size})
+                                found = True
+                                break
+                                
+                        if not found and new_size > 0.0:
+                            all_bids.append({"price": new_price, "size": new_size})
+                    
+                    break 
 
 
     def _on_message(self, ws, message):

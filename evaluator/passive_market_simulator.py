@@ -86,12 +86,21 @@ class passive_market_simulator(market_simulator):
                         "cash": self.get_user_cash()
                     }
                 )
-                for asset_id in asset_ids:
-                    mid_price = self.data_provider.get_mid_price(asset_id)
-                    if asset_id not in self.mid_prices:
-                        self.mid_prices[asset_id] = []
-                    self.mid_prices[asset_id].append({"mid_price": mid_price, "timestamp": current_timestamp})
+                mid_price_updates = []
 
+                try:
+                    for asset_id in asset_ids:
+                        mid_price = self.data_provider.get_mid_price(asset_id)
+                        mid_price_updates.append((asset_id, mid_price))
+
+                    # Commit only after all fetches succeeded
+                    for asset_id, mid_price in mid_price_updates:
+                        self.mid_prices.setdefault(asset_id, []).append({
+                            "mid_price": mid_price,
+                            "timestamp": current_timestamp,
+                        })
+                except Exception as e:
+                    print(f"Error occurred while fetching mid price for {asset_id}: {e}")
 
                 self.old_time_name = time_name
                 try:
