@@ -11,10 +11,10 @@ from bot.order_types import OrderType
 from bot.masterbot import masterbot
 from bot.order_actions import OrderAction
 from bot.order_types import OrderType
-from bot.prediction_models.gradient_boosting_predictor import initialize_predictor
+#from bot.prediction_models.gradient_boosting_predictor import initialize_predictor
 from bot.prediction_models.polynomial_predictor import polynomial_predictor
 from data_provider.historical_provider import historical_provider
-from evaluator.prediction_evaluator.snapshot_builder import create_snapshot
+#from evaluator.prediction_evaluator.snapshot_builder import create_snapshot
 
 class KStrategy(masterbot):
     def __init__(self, in_production=False, market=None, data_provider: historical_provider = None):
@@ -46,19 +46,19 @@ class KStrategy(masterbot):
         self.max_slow_drawdown = 0.07
         self.correction_time_window = 10000
         self.investment_cash_percent = 0.2
-        self.lookahead_time = 0
+        self.lookahead_time = 0 #use 3000 if using GradientBoostingPredictor
         self.edge_treshold = 0.03
         self.crypto_price_stdev = {"bitcoin-up-or-down": 300, "ethereum-up-or-down": 10.7, "solana-up-or-down": 0.6, "xrp-up-or-down": 0.0068,
                                    "btc-updown-5m": 10, "eth-updown-5m": 10.4}  # Example values for standard deviation of crypto prices
 
     def first_run_setup(self):
         super().first_run_setup()
-        #self.predictor = polynomial_predictor()
-        if self.predictor is None:
-            self.predictor = initialize_predictor(market_name=self.market.base_name,
-                                            lookahead_time=self.lookahead_time)
-        else:
-            self.predictor.reset()
+        self.predictor = polynomial_predictor()
+        # if self.predictor is None:
+        #     self.predictor = initialize_predictor(market_name=self.market.base_name,
+        #                                     lookahead_time=self.lookahead_time)
+        # else:
+        #     self.predictor.reset()
 
         self.past_weighted_trends.clear()
         self.predictor.price_to_beat = self.price_to_beat
@@ -228,11 +228,11 @@ class KStrategy(masterbot):
             )
         '''
         #print(predicted_trend)
-        if self.predictor.name == "gradient_boosting_predictor":
-            snapshot = create_snapshot(self.data_provider)
-            self.predictor.update(snapshot=snapshot)
-            predicted_trend = self.predictor.predict(snapshot=snapshot)
-            #print(predicted_trend)
+
+        # snapshot = create_snapshot(self.data_provider)
+        # self.predictor.update(snapshot=snapshot)
+        # predicted_trend = self.predictor.predict(snapshot=snapshot)
+
         if time_factor < 0.01:
             time_factor = 0.01
         projected_up_value, projected_down_value = self.estimate_share_value(crypto_value, time_factor, predicted_trend)
