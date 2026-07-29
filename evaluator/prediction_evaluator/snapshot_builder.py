@@ -1,6 +1,7 @@
 from bisect import bisect_right
 from typing import Any
-from prediction_eval_dataclasses import OrderBookState, CryptoPrice, MarketSnapshot
+from data_provider.historical_provider import historical_provider
+from evaluator.prediction_evaluator.prediction_eval_dataclasses import OrderBookState, CryptoPrice, MarketSnapshot
 
 class SnapshotBuilder:
     def __init__(
@@ -94,62 +95,16 @@ class SnapshotBuilder:
             
             if up_book is not None:
                 #print(type(up_book))
-                book = self.parse_order_book(up_book)
+                book = parse_order_book(up_book)
                 books.append(book)
 
             if down_book is not None:
-                book = self.parse_order_book(down_book)
+                book = parse_order_book(down_book)
                 books.append(book)
 
         books.sort(key=lambda book: book.timestamp)
         return books
     
-    def parse_order_book(self, raw_book: dict[str, Any]):
-
-        timestamp = int(raw_book["timestamp"])
-        asset_id = str(raw_book["asset_id"])
-
-        bids = raw_book.get("bids")
-        asks = raw_book.get("asks")
-
-        if not bids:
-            best_bid_level = None
-            best_bid = None
-            best_bid_size = None
-        else:
-            best_bid_level = bids[-1]
-            best_bid = float(best_bid_level["price"])
-            best_bid_size = float(best_bid_level["size"])
-        
-        if not asks:
-            best_ask_level = None
-            best_ask = None
-            best_ask_size = None
-        else:
-            best_ask_level = asks[-1]
-            best_ask = float(best_ask_level["price"])
-            best_ask_size = float(best_ask_level["size"])
-
-        
-        if best_bid is not None and best_ask is not None:
-            midpoint = (best_bid + best_ask) / 2
-            spread = best_ask - best_bid
-        else:
-            midpoint = None
-            spread = None
-
-        return OrderBookState(
-            asset_id=asset_id,
-            timestamp=timestamp,
-            bids=bids,
-            asks=asks,
-            best_bid=best_bid,
-            best_ask=best_ask,
-            best_bid_size=best_bid_size,
-            best_ask_size=best_ask_size,
-            midpoint=midpoint,
-            spread=spread,
-        )
 
     def prepare_prices(self, raw_prices:list[dict[str, Any]]):
         prices = []
@@ -184,7 +139,64 @@ class SnapshotBuilder:
         return price
         
 
+def parse_order_book(raw_book: dict[str, Any]):
 
+    timestamp = int(raw_book["timestamp"])
+    asset_id = str(raw_book["asset_id"])
+
+    bids = raw_book.get("bids")
+    asks = raw_book.get("asks")
+
+    if not bids:
+        best_bid_level = None
+        best_bid = None
+        best_bid_size = None
+    else:
+        best_bid_level = bids[-1]
+        best_bid = float(best_bid_level["price"])
+        best_bid_size = float(best_bid_level["size"])
+    
+    if not asks:
+        best_ask_level = None
+        best_ask = None
+        best_ask_size = None
+    else:
+        best_ask_level = asks[-1]
+        best_ask = float(best_ask_level["price"])
+        best_ask_size = float(best_ask_level["size"])
+
+    
+    if best_bid is not None and best_ask is not None:
+        midpoint = (best_bid + best_ask) / 2
+        spread = best_ask - best_bid
+    else:
+        midpoint = None
+        spread = None
+
+    return OrderBookState(
+        asset_id=asset_id,
+        timestamp=timestamp,
+        bids=bids,
+        asks=asks,
+        best_bid=best_bid,
+        best_ask=best_ask,
+        best_bid_size=best_bid_size,
+        best_ask_size=best_ask_size,
+        midpoint=midpoint,
+        spread=spread,
+    )
+
+
+def prepare_order_book(raw_clob):
+    up_book = unwrap_clob_entry(raw_clob[0])
+    down_book = unwrap_clob_entry(raw_clob[1])
+    if up_book is not None:
+        #print(type(up_book))
+        up_book = parse_order_book(up_book)
+
+    if down_book is not None:
+        down_book = parse_order_book(down_book)
+    return up_book, down_book
 
 
 def unwrap_clob_entry(entry):
@@ -197,3 +209,22 @@ def unwrap_clob_entry(entry):
     #     ):
     #         return value
     return entry[1]
+
+def create_snapshot(data_provider: historical_provider):
+    timestamp = data_provider.get_current_timestamp()
+    end_timestamp = data_provider.get_end_timestamp()
+    if end_timestamp is None:
+        time_to_end_ms = None
+    else:
+        time_to_end_ms = max(0, end_timestamp - timestamp)
+    up_book, down_book = prepare_order_book(data_provider.get_order_book())
+    return MarketSnapshot(
+        timestamp=timestamp,
+        up_book=up_book,
+        down_book=down_book,
+        crypto_price=data_provider.get_crypto_value(),
+        crypto_price_timestamp=timestamp,
+        time_to_end_ms=time_to_end_ms,
+        price_to_beat=data_provider.get_price_to_beat(),
+        market_end_timestamp=end_timestamp,
+    )

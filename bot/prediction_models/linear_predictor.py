@@ -1,6 +1,6 @@
 from collections import deque
 from dataclasses import dataclass
-from evaluator.prediction_evaluator.prediction_eval_dataclasses import MarketSnapshot, PricePrediction
+from evaluator.prediction_evaluator.prediction_eval_dataclasses import MarketSnapshot, NumericPrediction, PricePrediction
 
 
 
@@ -41,7 +41,7 @@ class LinearPredictor:
         predicted_midpoint = snapshot.up_book.midpoint + self.alpha * momentum
         predicted_midpoint = min(1.0, max(0.0, predicted_midpoint)) # market prices should stay between 0 and 1
 
-        return PricePrediction(
+        return NumericPrediction(
             prediction_timestamp=snapshot.timestamp,
             horizon_ms=self.horizon_ms,
             predicted_midpoint=predicted_midpoint,
