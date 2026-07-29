@@ -24,6 +24,14 @@ class OrderBookFeed:
                 self.order_book.append([self.asset_id, market_data])
         #print(self.order_book)
 
+    def handle_price_changes(self, price_change):
+        with self._lock:
+            for i in range(len(self.order_book)):
+                if self.order_book[i][0] == price_change["asset_id"]:
+                    print(self.order_book[i][1], price_change)
+
+
+
     def _on_message(self, ws, message):
         """Processes real-time book frames directly from Polymarket."""
         try:
@@ -40,6 +48,9 @@ class OrderBookFeed:
 
                 if event_type in ("book", "tick_size_change"):
                     self._update_shared_book(event)
+                elif event_type == "price_change":
+                    for price_change in event.get("price_changes", []):
+                        self.handle_price_changes(price_change)
 
         except Exception as e:
             print(message)

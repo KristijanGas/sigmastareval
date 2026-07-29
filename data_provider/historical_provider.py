@@ -261,14 +261,15 @@ class historical_provider:
     def update_moving_mean(self):
         now = self.get_current_timestamp()
         values = self.get_past_crypto_values()
-        if self.moving_mean_l_time == 0 and self.get_crypto_value() is not None and len(values) > 0:
+        if (self.moving_mean_l_time == 0 and self.get_crypto_value() is not None and len(values) > 0) or self.moving_mean_l >= len(values) or self.moving_mean_r >= len(values):
             self.moving_mean_l_time = now
             self.moving_mean_r_time = now
             self.moving_mean_l = len(values) - 1
             self.moving_mean_r = len(values) - 1
+            self.moving_mean_sum = 0.0
             self.moving_mean = self.get_crypto_value()
             return
-        if len(values) <= 0:
+        if len(values) <= 0 or self.get_crypto_value() is None:
             return
         #update behind
         while self.moving_mean_l + 1 < len(values):

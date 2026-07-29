@@ -391,7 +391,6 @@ if __name__ == "__main__":
 
 		analysis_path = analysis_dir / f"{stem}.analysis.json"
 		print(analysis_path)
-		print(analytics["holdings_history"])
 		if not analysis_path.exists():
 			print("Could not find same replay engine analysis file")
 		else:
