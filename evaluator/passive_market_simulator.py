@@ -125,7 +125,6 @@ class passive_market_simulator(market_simulator):
         analytics["on_chain_delay"] = self.on_chain_delay
         analytics["order_timeout"] = self.order_timeout
         analytics["past_crypto_predictions"] = self.bot.past_crypto_predictions
-        self.bot.past_crypto_predictions.clear()
         analytics["on_chain_order_matches"] = self.order_matches
         analytics["mid_prices"] = self.mid_prices
         analytics["crypto_prices"] = self.data_provider.consume_crypto_values()
@@ -141,6 +140,7 @@ class passive_market_simulator(market_simulator):
         self.holdings_history.clear()
         self.cash_history.clear()
         self.mid_prices.clear()
+        self.bot.past_crypto_predictions.clear()
         self.price_to_beat = None
         self.clobTokenIds = None
         self.outcomes = None
