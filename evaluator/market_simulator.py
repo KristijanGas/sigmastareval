@@ -14,7 +14,7 @@ class market_simulator:
         self.min_order_size = {}
         self.fee_percent = 0.07
         self.on_chain_delay = 2000
-        self.matching_delay = 350
+        self.matching_delay = 290
         self.new_order = {}
         # order control
         self.last_placed_order_type = {}

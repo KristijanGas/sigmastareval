@@ -51,10 +51,12 @@ class passive_market_simulator(market_simulator):
                 self.outcomes = self.data_provider.get_outcomes()
                 print(f"Waiting for market asset IDs and outcomes to be set. Current values: {self.clobTokenIds}, {self.outcomes}")
                 time.sleep(0.1)
+            for token_id in self.clobTokenIds:
+                self.mid_prices[token_id] = []
             print(f"Price to beat: {self.price_to_beat}, market initialized with starting cash: {self.current_cash}")
             print(f"Market asset IDs: {self.clobTokenIds}, Market outcomes: {self.outcomes}")
             while True:
-                time.sleep(0.05)
+                time.sleep(0.025)
                 if market_type == "hourly":
                     time_name = parse_time_name_hourly()["hourly_name"]
                 elif market_type == "5m":
@@ -86,21 +88,13 @@ class passive_market_simulator(market_simulator):
                         "cash": self.get_user_cash()
                     }
                 )
-                mid_price_updates = []
-
-                try:
-                    for asset_id in asset_ids:
-                        mid_price = self.data_provider.get_mid_price(asset_id)
-                        mid_price_updates.append((asset_id, mid_price))
-
-                    # Commit only after all fetches succeeded
-                    for asset_id, mid_price in mid_price_updates:
-                        self.mid_prices.setdefault(asset_id, []).append({
-                            "mid_price": mid_price,
-                            "timestamp": current_timestamp,
-                        }.copy())
-                except Exception as e:
-                    print(f"Error occurred while fetching mid price for {asset_id}: {e}")
+                #try:
+                asset_ids = self.data_provider.get_market_asset_ids()
+                for asset_id in asset_ids:
+                    mid_price = self.data_provider.get_mid_price(asset_id)
+                    self.mid_prices[asset_id].append({"mid_price": mid_price, "timestamp": current_timestamp})
+                #except Exception as e:
+                    #print(f"Error occurred while fetching mid price for {asset_id}: {e}")
 
                 self.old_time_name = time_name
                 try:
