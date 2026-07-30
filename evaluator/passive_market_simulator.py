@@ -98,7 +98,7 @@ class passive_market_simulator(market_simulator):
                         self.mid_prices.setdefault(asset_id, []).append({
                             "mid_price": mid_price,
                             "timestamp": current_timestamp,
-                        })
+                        }.copy())
                 except Exception as e:
                     print(f"Error occurred while fetching mid price for {asset_id}: {e}")
 
