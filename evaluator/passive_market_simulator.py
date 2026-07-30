@@ -127,7 +127,7 @@ class passive_market_simulator(market_simulator):
         analytics["past_crypto_predictions"] = self.bot.past_crypto_predictions
         analytics["on_chain_order_matches"] = self.order_matches
         analytics["mid_prices"] = self.mid_prices
-        analytics["crypto_prices"] = self.data_provider.consume_crypto_values()
+        analytics["crypto_prices"] = self.data_provider.get_past_crypto_values()
         analytics["price_to_beat"] = self.price_to_beat
         analytics["asset_labels"] = asset_labels
         unique_hash = uuid.uuid4().hex

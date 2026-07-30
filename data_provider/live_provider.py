@@ -118,6 +118,7 @@ class live_provider(historical_provider):
 
     def set_market(self, time_name):
         self.set_price_to_beat(self.get_crypto_value())
+        self.consume_crypto_values()
         self.moving_mean_sum = 0.0
         self.moving_mean = None
         self.moving_mean_l = 0
