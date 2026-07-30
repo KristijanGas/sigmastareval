@@ -254,5 +254,7 @@ class KStrategy(masterbot):
             self.manage_desired_inventory(desired_shares, 0, projected_up_value, projected_down_value)
         elif edge_down > self.edge_treshold * (1 + time_factor):
             self.manage_desired_inventory(0, desired_shares, projected_up_value, projected_down_value)
-        self.manage_inventory(time_factor, predicted_trend)
         self.update_estimation_alpha(current_timestamp, self.up_price, projected_up_value)
+        if moving_mean is not None:
+            #self.manage_inventory(time_factor, predicted_trend)
+            pass
