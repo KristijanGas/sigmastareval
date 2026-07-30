@@ -10,6 +10,7 @@ class masterbot(ABC):
         self.in_production = in_production
         self.market = market
         self.data_provider = data_provider
+        self.past_crypto_predictions = []
 
     def get_current_timestamp(self):
         return self.data_provider.get_current_timestamp()
@@ -32,7 +33,7 @@ class masterbot(ABC):
             self.up_token_id = self.data_provider.get_up_token_id()
             self.down_token_id = self.data_provider.get_down_token_id()
             self.first_run = False
-            self.past_crypto_predictions = []
+            #self.past_crypto_predictions = []
             self.order_library = []
 
 

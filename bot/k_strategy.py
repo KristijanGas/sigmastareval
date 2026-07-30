@@ -30,7 +30,6 @@ class KStrategy(masterbot):
         self.money_reserved_for_down = 0.0
         self.up_shares = 0.0
         self.down_shares = 0.0
-        self.past_crypto_predictions = []
         self.past_weighted_trends = deque()
         self.past_trends_windowsize = 20000
         self.trend_alpha = 1.0

@@ -227,6 +227,7 @@ class replay_engine:
             "past_crypto_predictions" : self.bot.past_crypto_predictions,
             "on_chain_order_matches": self.market.order_matches #pending payouts that didnt mine on the chain
         }
+        self.bot.past_crypto_predictions.clear()
         return analytics
     @staticmethod
     def get_analysis_path(gz_path):
