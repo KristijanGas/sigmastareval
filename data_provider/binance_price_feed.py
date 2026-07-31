@@ -11,14 +11,14 @@ class BinancePriceFeed:
         self.symbol = symbol.upper()
         self.correct_timestamps = correct_timestamps # instantly convert seconds to milliseconds int timestamps
 
-        self._lock = threading.Lock()
         self._buffer = []
+        self._latest_price = None
 
     def _on_message(self, ws, message):
         data = json.loads(message)
 
         price = (float(data["b"]) + float(data["a"])) / 2
-
+        self._latest_price = price
         tick = {
             "symbol": self.symbol,
             "price": price,
@@ -28,9 +28,10 @@ class BinancePriceFeed:
             tick["timestamp"] *= 1000
             tick["timestamp"] = int(tick["timestamp"])
 
-        with self._lock:
-            if len(self._buffer) == 0 or price != self._buffer[-1]["price"]:
-                self._buffer.append(tick)
+        
+        if len(self._buffer) == 0 or price != self._buffer[-1]["price"]:
+            self._buffer.append(tick)
+
 
     def start(self):
         url = (
@@ -49,20 +50,16 @@ class BinancePriceFeed:
         thread.start()
 
     def consume(self):
-        with self._lock:
-            data = self._buffer
-            self._buffer = []
+        '''Not thread safe, use to clear buffer between markets only!!!'''
+        data = self._buffer
+        self._buffer = []
         return data
 
     def read_buffer(self):
-        with self._lock:
-            return self._buffer
+        return self._buffer[:]
 
     def get_current_price(self):
-        with self._lock:
-            if len(self._buffer) == 0:
-                return None
-            return self._buffer[-1]["price"]
+        return self._latest_price
 
     def _run(self):
         while True:

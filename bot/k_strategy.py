@@ -183,21 +183,21 @@ class KStrategy(masterbot):
         order_book = self.data_provider.get_order_book()
         if order_book is None:
             print("Order book is None. Cannot proceed with strategy.")
-            return
+            return False
         crypto_value = self.data_provider.get_crypto_value()
         if crypto_value is None:
             print("Crypto value is None. Cannot proceed with strategy.")
-            return
+            return False
         self.price_to_beat = self.data_provider.get_price_to_beat()
         if self.price_to_beat is None:
             print("Price to beat is None. Cannot proceed with strategy.")
-            return
+            return False
         if self.data_provider.get_end_timestamp() is None:
             print("End timestamp is None. Cannot proceed with strategy.")
-            return
+            return False
         if self.data_provider.get_market_asset_ids() is None or len(self.data_provider.get_market_asset_ids()) < 2:
             print("Market asset IDs are None or insufficient. Cannot proceed with strategy.")
-            return
+            return False
         self.up_token_id = self.data_provider.get_up_token_id()
         self.down_token_id = self.data_provider.get_down_token_id()
         self.update_cash_reservations()
@@ -210,8 +210,8 @@ class KStrategy(masterbot):
             self.down_price = self.data_provider.get_mid_price(self.down_token_id)
         except Exception as e:
             print(f"Error fetching mid price: {e}")
-            return
-        
+            return False
+
         #kalman_filtered = self.data_provider.get_kalman_filtered(self.kalman_window_size)
         #velocity = float(kalman_filtered[-1]["price"])
         time_remaining = (self.data_provider.get_end_timestamp() -current_timestamp) / 1000.0
@@ -258,3 +258,4 @@ class KStrategy(masterbot):
         if moving_mean is not None:
             #self.manage_inventory(time_factor, predicted_trend)
             pass
+        return True

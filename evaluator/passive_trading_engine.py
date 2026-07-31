@@ -63,8 +63,9 @@ class PassiveTradingEngine:
                 self.bot.first_run_setup()
                 self.old_time_name = time_name
             if self.live_provider.current_market_name is not None and self.live_provider.current_market_name == f"{self.market_slug}-{time_name}":
-                self.bot.run()
-            time.sleep(0.01)
+                ran_correctly = self.bot.run()
+                if not ran_correctly:
+                    time.sleep(0.1)
             #print("cash: ", self.market.get_user_cash())
             #print("holdings: ", self.market.get_user_holdings())
 
