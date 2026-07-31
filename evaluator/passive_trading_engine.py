@@ -45,7 +45,7 @@ class PassiveTradingEngine:
         self.market_thread.start()
         self.bot_thread = threading.Thread(target=self.run_bot, daemon=True)
         self.bot_thread.start()
-        self.live_dashboard = LiveDashboard(self.live_provider, history=50000)
+        self.live_dashboard = LiveDashboard(self.live_provider, history=30000)
         self.live_dashboard.run()
         
     def run_bot(self):
@@ -64,6 +64,7 @@ class PassiveTradingEngine:
                 self.old_time_name = time_name
             if self.live_provider.current_market_name is not None and self.live_provider.current_market_name == f"{self.market_slug}-{time_name}":
                 ran_correctly = self.bot.run()
+                time.sleep(0.0001) # there's a bug where if you remove this, dashboard lags like hell
                 if not ran_correctly:
                     time.sleep(0.1)
             #print("cash: ", self.market.get_user_cash())

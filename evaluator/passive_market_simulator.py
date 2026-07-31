@@ -31,6 +31,8 @@ class passive_market_simulator(market_simulator):
         self.holdings_history = []
         self.cash_history = []
         self.mid_prices = {}
+        self.should_update_order_book = False
+        self.unique_hash = uuid.uuid4().hex # bot testing session identifier
 
     def run(self, market_type):
         print(f"Starting passive market simulator for {self.base_name} with starting cash: {self.current_cash}")
@@ -56,7 +58,7 @@ class passive_market_simulator(market_simulator):
             print(f"Price to beat: {self.price_to_beat}, market initialized with starting cash: {self.current_cash}")
             print(f"Market asset IDs: {self.clobTokenIds}, Market outcomes: {self.outcomes}")
             while True:
-                time.sleep(0.025)
+                time.sleep(0.02)
                 if market_type == "hourly":
                     time_name = parse_time_name_hourly()["hourly_name"]
                 elif market_type == "5m":
@@ -88,13 +90,13 @@ class passive_market_simulator(market_simulator):
                         "cash": self.get_user_cash()
                     }
                 )
-                #try:
-                asset_ids = self.data_provider.get_market_asset_ids()
-                for asset_id in asset_ids:
-                    mid_price = self.data_provider.get_mid_price(asset_id)
-                    self.mid_prices[asset_id].append({"mid_price": mid_price, "timestamp": current_timestamp})
-                #except Exception as e:
-                    #print(f"Error occurred while fetching mid price for {asset_id}: {e}")
+                try:
+                    asset_ids = self.data_provider.get_market_asset_ids()
+                    for asset_id in asset_ids:
+                        mid_price = self.data_provider.get_mid_price(asset_id)
+                        self.mid_prices[asset_id].append({"mid_price": mid_price, "timestamp": current_timestamp})
+                except Exception as e:
+                    print(f"Error occurred while fetching mid price for {asset_id}: {e}")
 
                 self.old_time_name = time_name
                 try:
@@ -124,8 +126,8 @@ class passive_market_simulator(market_simulator):
         analytics["crypto_prices"] = self.data_provider.get_past_crypto_values()
         analytics["price_to_beat"] = self.price_to_beat
         analytics["asset_labels"] = asset_labels
-        unique_hash = uuid.uuid4().hex
-        store_path = REPO_ROOT / "live_runs" / "passive" / f"{self.base_name}" / f"{self.base_name}-{self.old_time_name}_{unique_hash}.json.gz"
+        
+        store_path = REPO_ROOT / "live_runs" / "passive" / f"{self.base_name}" / f"{self.base_name}-{self.old_time_name}_{self.unique_hash}.json.gz"
         os.makedirs(os.path.dirname(store_path), exist_ok=True)
         with gzip.open(store_path, "wt", encoding="utf-8") as f:
             json.dump(analytics, f)

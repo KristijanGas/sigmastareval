@@ -7,10 +7,12 @@ import pyqtgraph as pg
 from PyQt6.QtCore import QTimer, Qt
 from PyQt6.QtWidgets import QApplication
 
+from data_provider import live_provider
+
 
 class LiveDashboard:
 
-    def __init__(self, data_provider, history=60000):
+    def __init__(self, data_provider: live_provider, history=6000):
         self.data = data_provider
         self.history = history
 
@@ -249,7 +251,7 @@ class LiveDashboard:
                 print(e)
 
         timer.timeout.connect(update)
-        timer.start(100)
+        timer.start(20)
 
         win.show()
         app.exec()

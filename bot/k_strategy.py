@@ -38,6 +38,7 @@ class KStrategy(masterbot):
         self.max_mean_up = None
         self.max_mean_down = None
         self.predictor = None
+        self.last_logged_timestamp = None
 
         #parameters
         self.time_volatility_alpha = 1050
@@ -202,7 +203,7 @@ class KStrategy(masterbot):
         self.down_token_id = self.data_provider.get_down_token_id()
         self.update_cash_reservations()
         current_timestamp = self.data_provider.get_current_timestamp()
-        self.predictor.update_past_crypto_values(crypto_value, current_timestamp, self.data_provider.get_end_timestamp())
+        #self.predictor.update_past_crypto_values(crypto_value, current_timestamp, self.data_provider.get_end_timestamp())
         self.up_shares = self.market.get_user_holdings().get(self.up_token_id, 0)
         self.down_shares = self.market.get_user_holdings().get(self.down_token_id, 0)
         try:
@@ -231,18 +232,20 @@ class KStrategy(masterbot):
         # snapshot = create_snapshot(self.data_provider)
         # self.predictor.update(snapshot=snapshot)
         # predicted_trend = self.predictor.predict(snapshot=snapshot)
-
+        
         if time_factor < 0.01:
             time_factor = 0.01
         projected_up_value, projected_down_value = self.estimate_share_value(crypto_value, time_factor, predicted_trend)
-        self.data_provider.set_fair_value_up(projected_up_value)
-        self.data_provider.set_fair_value_down(projected_down_value)
         moving_mean = self.data_provider.get_moving_mean()
-        self.past_crypto_predictions.append({"timestamp": self.data_provider.get_current_timestamp(),
-                                              "up_prediction": projected_up_value,
-                                              "down_prediction": projected_down_value,
-                                              "moving_mean": moving_mean
-                                              })
+        if self.last_logged_timestamp is None or current_timestamp - self.last_logged_timestamp >= 20:
+            self.past_crypto_predictions.append({"timestamp": current_timestamp,
+                                                "up_prediction": projected_up_value,
+                                                "down_prediction": projected_down_value,
+                                                "moving_mean": moving_mean
+                                                })
+            self.data_provider.set_fair_value_up(projected_up_value)
+            self.data_provider.set_fair_value_down(projected_down_value)
+            self.last_logged_timestamp = current_timestamp
 
         edge_up = projected_up_value - self.up_price
         edge_down = projected_down_value - self.down_price

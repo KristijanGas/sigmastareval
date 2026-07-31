@@ -16,6 +16,7 @@ class market_simulator:
         self.on_chain_delay = 2000
         self.matching_delay = 290
         self.new_order = {}
+        self.should_update_order_book = True
         # order control
         self.last_placed_order_type = {}
         self.order_timeout = 1000
@@ -271,11 +272,11 @@ class market_simulator:
                         "on_chain_update": on_chain_update
                     }
                 )
-                
-            if update_bids is not None:
-                self.data_provider.update_bids(asset_id, update_bids)
-            if update_asks is not None:
-                self.data_provider.update_asks(asset_id, update_asks)
+            if self.should_update_order_book:
+                if update_bids is not None:
+                    self.data_provider.update_bids(asset_id, update_bids)
+                if update_asks is not None:
+                    self.data_provider.update_asks(asset_id, update_asks)
         for order_id in orderIDs_to_remove:
             self.cancel_order(order_id)
 

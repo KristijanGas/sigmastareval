@@ -12,6 +12,8 @@ class historical_provider:
         self.metadata = metadata
         self.up_token_id = None
         self.down_token_id = None
+        self.fair_value_up = None
+        self.fair_value_down = None
         self.past_crypto_values = []
         self.current_timestamp = 0
         self.moving_mean_time = 60000
