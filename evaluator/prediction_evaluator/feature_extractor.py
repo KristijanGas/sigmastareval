@@ -147,6 +147,12 @@ class MarketFeatureExtractor:
       )
    
    def update_and_extract(self, snapshot: MarketSnapshot):
+      if snapshot is None:
+         return None
+      
+      if snapshot.up_book is None:
+         return None
+      
       current_midpoint = snapshot.up_book.midpoint
 
       if current_midpoint is None:

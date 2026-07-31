@@ -75,7 +75,7 @@ class GradientBoostingPredictor:
          learning_rate=0.03,
          max_iter=1000,
          max_leaf_nodes=3,
-         min_samples_leaf=50,
+         min_samples_leaf=100,
          l2_regularization=1.0,
          early_stopping=True,
          validation_fraction=0.15,
@@ -311,14 +311,17 @@ def initialize_predictor(lookahead_time, market_name):
 
 def get_model(market_name):
    if market_name == "bitcoin-up-or-down":
-      model = joblib.load("bot/trained_models/trend_model_btc.joblib")
+      model = joblib.load("bot/trained_models/trend_model_btc_2.joblib")
       print("bitcoin model loaded")
    elif market_name == "ethereum-up-or-down":
-      model = joblib.load("bot/trained_models/trend_model_eth.joblib")
+      model = joblib.load("bot/trained_models/trend_model_eth_2.joblib")
+      print("ethereum model loaded")
    elif market_name == "solana-up-or-down":
-      model = joblib.load("bot/trained_models/trend_model_sol.joblib")
+      model = joblib.load("bot/trained_models/trend_model_sol_2.joblib")
+      print("solana model loaded")
    elif market_name == "xrp-up-or-down":
-      model = joblib.load("bot/trained_models/trend_model_xrp.joblib")
+      model = joblib.load("bot/trained_models/trend_model_xrp_2.joblib")
+      print("xrp model loaded")
    else:
       model = None
 
