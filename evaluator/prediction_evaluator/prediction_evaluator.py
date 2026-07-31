@@ -1,10 +1,15 @@
 
 #from predictors import MultiWindowMomentumPredictor, RegressionMomentumPredictor, MultiWindowRegressionPredictor
+import gc
+from importlib.metadata import files
 from pathlib import Path
 import json
 import sys
 import gzip
+import time
 import joblib
+
+
 
 
 if __package__ is None or __package__ == "":
@@ -21,7 +26,7 @@ from datetime import datetime
 
 import numpy as np
 from sklearn.ensemble import HistGradientBoostingRegressor
-
+from evaluator.utils.utils import extract_timestamp, sort_paths_chronologically
 
 from evaluator.prediction_evaluator.future_target_matcher import FutureTargetMatcher
 from evaluator.prediction_evaluator.snapshot_builder import SnapshotBuilder
@@ -265,6 +270,7 @@ def create_training_samples_trend(
     feature_names: Sequence[str],
     horizon_ms: int,
     max_target_delay_ms: int | None = None,
+    sample_interval_ms: int | None = 5000,  #space between two training samples
 ) -> tuple[np.ndarray, np.ndarray]:
     feature_names = tuple(feature_names)
     feature_extractor.reset()
@@ -273,20 +279,11 @@ def create_training_samples_trend(
     X_rows: list[tuple[float, ...]] = []
     y_values: list[float] = []
 
-    for index, snapshot in enumerate(snapshots):
-        type(snapshot)
-        if not isinstance(snapshot, MarketSnapshot):
-            print(index)
-            print(len(snapshot))
-            print(type(snapshot).__name__)
-            # raise TypeError(
-            #     f"Expected MarketSnapshot at index {index}, "
-            #     f"got {type(snapshot).__name__}: "
-            #     f"{snapshot!r}"
-            # )
+    last_training_sample_timestamp = None
+
+    for snapshot in snapshots:
         
         current_crypto_price = snapshot.crypto_price
-
         if current_crypto_price is None:
             continue
 
@@ -320,6 +317,14 @@ def create_training_samples_trend(
         if not extracted.features.has_all(feature_names):
             continue
 
+        # skipping timestamps that are two close to each other to reduce
+        #  many dependent rows
+        if (sample_interval_ms is not None
+            and last_training_sample_timestamp is not None
+            and extracted.timestamp - last_training_sample_timestamp
+            < sample_interval_ms):
+            continue
+
         pending.append(
             PendingTrainingRow(
                 prediction_timestamp=extracted.timestamp,
@@ -327,6 +332,7 @@ def create_training_samples_trend(
                 feature_values=extracted.features.select_values(feature_names),
             )
         )
+        last_training_sample_timestamp = extracted.timestamp
 
     feature_count = len(feature_names)
 
@@ -460,6 +466,7 @@ def create_training_dataset(
             
         X_parts.append(X_market)
         y_parts.append(y_market)
+        print("samples ready")
 
     if not X_parts:
         raise ValueError("No valid training samples were created.")
@@ -489,6 +496,71 @@ def generate_test_and_train_data(dataset_paths):
                     count += 1
     return test_paths, train_snapshots
 
+
+# creates snapshots and training samples for one market at a time
+#   optimized memory usage
+def prepare_training_data(
+    train_paths: Sequence[Path],
+    feature_extractor: MarketFeatureExtractor,
+    feature_names: Sequence[str],
+    horizon_ms: int,
+    max_target_delay_ms: int | None = None,
+    sample_interval_ms: int | None = 5000,
+) -> tuple[np.ndarray, np.ndarray]:
+    X_markets: list[np.ndarray] = []
+    y_markets: list[np.ndarray] = []
+
+    total_samples = 0
+
+    for data_file in train_paths:
+        try:
+            file = data_file.resolve()
+            with gzip.open(file, "rt", encoding="utf-8") as f:
+                data = json.load(f)
+        except json.JSONDecodeError as error:
+            print(
+                f"Skipping {data_file.name}: "
+                f"invalid JSON at position {error.pos}: "
+                f"{error.msg}"
+            )
+            continue
+
+        market_snapshots = prepare_market_snapshots(data)
+        del data
+
+        X_market, y_market = create_training_samples_trend(
+            snapshots=market_snapshots,
+            feature_extractor=feature_extractor,
+            feature_names=feature_names,
+            horizon_ms=horizon_ms,
+            max_target_delay_ms=max_target_delay_ms
+        )
+
+        del market_snapshots
+
+        if len(X_market) > 0: 
+            X_markets.append(np.asarray(X_market, dtype=np.float32))
+            y_markets.append(np.asarray(y_market, dtype=np.float32))
+            total_samples += len(y_market)
+
+        print(
+            f"{data_file.name}: "
+            f"{len(y_market):,} samples, "
+            f"{total_samples:,} total"
+        )
+        
+        gc.collect()
+        print(f"done: {data_file.name}")
+
+    if not X_markets:
+        return (np.empty((0, len(feature_names)),dtype=np.float32,),
+            np.empty((0,), dtype=np.float32))
+
+    X_train = np.concatenate(X_markets, axis=0)
+    y_train = np.concatenate(y_markets, axis=0)
+
+    return X_train, y_train
+
 def get_test_paths(dataset_paths):
     test_paths = []
     for dataset in dataset_paths:
@@ -496,6 +568,51 @@ def get_test_paths(dataset_paths):
             test_paths.append(data_file)
             
     return test_paths
+
+def get_train_paths(dataset_paths):
+    train_paths = []
+    days = 5
+    older_than_time = days * 24 * 60 * 60  # 10 days in
+    newer_than_timestamp = 1783286309.0 # 5.7.2026.
+    
+    for dataset in dataset_paths:
+        for data_file in Path(dataset).glob("*.gz"):
+            #print(f"Found data file: {data_file}")
+            #print(data_file.name)
+            
+            file_creation_date = extract_timestamp(filename=data_file.name)
+            if file_creation_date < 1785365568.3137162 - older_than_time and file_creation_date > newer_than_timestamp:
+                train_paths.append(data_file)
+                #print(f"Added data file: {data_file}")
+    return train_paths
+
+def get_new_test_paths(dataset_paths):
+    test_paths = []
+    days = 3
+    newer_than_time = days * 24 * 60 * 60  # 10 days in seconds
+    for dataset in dataset_paths:
+        for data_file in Path(dataset).glob("*.gz"):
+            #print(f"Found data file: {data_file}")
+            
+            file_creation_date = extract_timestamp(filename=data_file.name)
+            if newer_than_time is not None and file_creation_date > 1785365568.3137162 - newer_than_time:
+                test_paths.append(data_file)
+                #print(f"Added data file: {data_file}")
+    return test_paths
+
+def prepare_train_snapshots(train_paths):
+    train_snapshots = []
+    for data_file in train_paths:
+        file = data_file.resolve()
+        with gzip.open(file, "rt", encoding="utf-8") as f:
+            data = json.load(f)
+            market_snapshots = prepare_market_snapshots(data)
+            train_snapshots.append(market_snapshots)
+        del market_snapshots
+        del data
+        gc.collect()
+
+    return train_snapshots
 
 def start_evaluation(predictor, test_paths):
     for data_file in test_paths:
@@ -576,22 +693,42 @@ def main():
     training_required = True
 
     if training_required:
-        test_paths, train_snapshots = generate_test_and_train_data(dataset_paths)
+        #test_paths, train_snapshots = generate_test_and_train_data(dataset_paths)
+        train_paths = get_train_paths(dataset_paths=dataset_paths)
+        train_paths = sort_paths_chronologically(train_paths)
+        #print(train_paths)
+        #train_snapshots = prepare_train_snapshots(train_paths=train_paths)
+        #print("snapshots done")
 
-        training_samples = create_training_dataset(
-            markets=train_snapshots,
-            feature_extractor=MarketFeatureExtractor(binance_lookbacks_ms=(1000,3000,3500),
+        test_paths = get_new_test_paths(dataset_paths=dataset_paths)
+        test_paths = sort_paths_chronologically(test_paths)
+        #print(test_paths)
+
+        #training_samples = None
+        training_samples = prepare_training_data(
+            train_paths=train_paths,
+            feature_extractor=MarketFeatureExtractor(binance_lookbacks_ms=(1000,3000,5000),
                                                      crypto_range_windows_ms=(5000,15000, 30000)),
             #feature_extractor=MarketFeatureExtractor(),
             feature_names=GRADIENT_BOOSTING_FEATURES,
             horizon_ms=3000,
             max_target_delay_ms=1000,
         )
+
+        # training_samples = create_training_dataset(
+        #     markets=train_snapshots,
+        #     feature_extractor=MarketFeatureExtractor(binance_lookbacks_ms=(1000,3000,5000),
+        #                                              crypto_range_windows_ms=(5000,15000, 30000)),
+        #     #feature_extractor=MarketFeatureExtractor(),
+        #     feature_names=GRADIENT_BOOSTING_FEATURES,
+        #     horizon_ms=3000,
+        #     max_target_delay_ms=1000,
+        # )
         #model = joblib.load("bot/trained_models/trend_model_btc2.joblib")
         #model = joblib.load("bot/trained_models/trend_model_btc.joblib")
         predictor = GradientBoostingPredictor(
             model=None,
-            feature_extractor=MarketFeatureExtractor(binance_lookbacks_ms=(1000,3000,3500),
+            feature_extractor=MarketFeatureExtractor(binance_lookbacks_ms=(1000,3000,5000),
                                                      crypto_range_windows_ms=(5000,15000,30000)),
             #feature_extractor=MarketFeatureExtractor(),
             horizon_ms=3000,
@@ -599,9 +736,9 @@ def main():
             target_name="normalized_crypto_trend",
             gradient_boosting_features=GRADIENT_BOOSTING_FEATURES,
             training_samples=training_samples,
-            market_name="xrp-up-or-down",
+            market_name="ethereum-up-or-down",
         )
-        joblib.dump(predictor.model, "bot/trained_models/trend_model_xrp.joblib")
+        joblib.dump(predictor.model, "bot/trained_models/trend_model_eth_2.joblib")
         start_evaluation(predictor, test_paths=test_paths)
     else:
         test_paths=get_test_paths(dataset_paths=dataset_paths)
