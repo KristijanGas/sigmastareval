@@ -390,10 +390,10 @@ if __name__ == "__main__":
 		stem = re.sub(r"_[0-9a-fA-F]{32}$", "", stem)
 
 		analysis_path = analysis_dir / f"{stem}.analysis.json"
-		print(analysis_path)
 		if not analysis_path.exists():
 			print("Could not find same replay engine analysis file")
 		else:
+			print(analysis_path)
 			with analysis_path.open("r", encoding="utf-8") as handle:
 				base_analytics = json.load(handle)
 
