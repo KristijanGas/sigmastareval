@@ -32,7 +32,6 @@ class live_provider(historical_provider):
         self.market_type = market_type
 
         self.last_time_name = None
-        self.order_book = None
         self.crypto_value = None
         self.price_to_beat = None
         self.end_timestamp = None
@@ -42,6 +41,7 @@ class live_provider(historical_provider):
         self.token_ids = None
         self.fair_value_down = None
         self.fair_value_up = None
+        self.order_book = {}
         self.order_book_feed = None
         self.order_book_feed_thread = None
         self.current_market_name = None
@@ -66,7 +66,7 @@ class live_provider(historical_provider):
 
                 if self.last_time_name is None or time_name != self.last_time_name:
                     self.last_time_name = time_name
-                    self.order_book = []
+                    self.order_book = {}
                     self.price_to_beat = None
                     self.end_timestamp = None
                     self.metadata = None
@@ -144,8 +144,7 @@ class live_provider(historical_provider):
         for token_id in self.token_ids:
             self.market.set_min_order_size(token_id, self.metadata[0]["markets"][0]["orderMinSize"])
 
-        self.order_book_lock = threading.Lock()
-        self.order_book_feed = OrderBookFeed([self.up_token_id, self.down_token_id], self.order_book, self.order_book_lock)
+        self.order_book_feed = OrderBookFeed([self.up_token_id, self.down_token_id], self.order_book)
 
         # start threads
         self.order_book_feed_thread = threading.Thread(target=self.order_book_feed.run, daemon=True)
@@ -163,6 +162,12 @@ class live_provider(historical_provider):
     def get_past_crypto_values(self):
         return self.binance_feed.read_buffer()
     
+    def get_best_ask(self, asset_id):
+        return self.order_book_feed.order_book[asset_id]["best_ask"]
+    
+    def get_best_bid(self, asset_id):
+        return self.order_book_feed.order_book[asset_id]["best_bid"]
+
     def get_outcomes(self):
         if self.metadata is not None:
             return json.loads(self.metadata[0]["markets"][0]["outcomes"])

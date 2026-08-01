@@ -2,83 +2,18 @@ import json
 import threading
 import time
 import websocket
+import queue
 
 class OrderBookFeed:
-    def __init__(self, asset_ids, order_book=None, lock=None):
-        self._lock = lock
+    def __init__(self, asset_ids, order_book=None):
         self.asset_ids = asset_ids
+        self.change_queue = queue.SimpleQueue()
+        for asset_id in asset_ids:
+            order_book[asset_id] = {"bids": {}, "asks": {}, "best_bid": None, "best_ask": None}
         self.order_book = order_book
         self.stopped = False
         self.socket_thread = None
         self.ws = None
-
-    def _update_shared_book(self, market_data):
-        """Safely updates or appends to the shared structure using your exact list layout."""
-        found = False
-        asset_id = market_data.get("asset_id")
-        with self._lock:
-            for i in range(len(self.order_book)):
-                if self.order_book[i][0] == asset_id:
-                    self.order_book[i] = [asset_id, market_data]
-                    found = True
-                    break
-            
-            if not found:
-                self.order_book.append([asset_id, market_data])
-        #print(self.order_book)
-
-    def handle_price_changes(self, price_change):
-        new_price = round(float(price_change["price"]), 5)
-        new_size = round(float(price_change["size"]), 5)
-        with self._lock:
-            for i in range(len(self.order_book)):
-                if self.order_book[i][0] == price_change["asset_id"]:
-                    found = False
-                    
-                    if price_change["side"] == 'SELL':
-                        all_asks = self.order_book[i][1].setdefault("asks", [])
-                        for j in range(len(all_asks)):
-                            ask_price = round(float(all_asks[j]["price"]), 5)
-                            prev_ask_price = round(float(all_asks[j - 1]["price"]), 5) if j > 0 else 1.0
-                            if ask_price == new_price:
-                                if new_size > 0.0:
-                                    all_asks[j]["size"] = new_size
-                                else:
-                                    all_asks.pop(j)
-                                found = True
-                                break
-                            elif new_price > prev_ask_price and new_price < ask_price:
-                                if new_size > 0.0:
-                                    all_asks.insert(j, {"price": new_price, "size": new_size})
-                                    found = True
-                                break
-                                
-                        if not found and new_size > 0.0:
-                            all_asks.append({"price": new_price, "size": new_size})
-
-                    else:  # BUY Side
-                        all_bids = self.order_book[i][1].setdefault("bids", [])
-                        for j in range(len(all_bids)):
-                            bid_price = round(float(all_bids[j]["price"]), 5)
-                            prev_bid_price = round(float(all_bids[j - 1]["price"]), 5) if j > 0 else 0.0
-                            if bid_price == new_price:
-                                if new_size > 0.0:
-                                    all_bids[j]["size"] = new_size
-                                else:
-                                    all_bids.pop(j)
-                                found = True
-                                break
-                            elif new_price > prev_bid_price and new_price < bid_price:
-                                if new_size > 0.0:
-                                    all_bids.insert(j, {"price": new_price, "size": new_size})
-                                found = True
-                                break
-                                
-                        if not found and new_size > 0.0:
-                            all_bids.append({"price": new_price, "size": new_size})
-                    
-                    break 
-
 
     def _on_message(self, ws, message):
         """Processes real-time book frames directly from Polymarket."""
@@ -86,22 +21,13 @@ class OrderBookFeed:
             data = json.loads(message)
 
             # Polymarket often sends a list of events
-            if isinstance(data, list):
-                events = data
-            else:
-                events = [data]
+            if isinstance(data, dict):
+                data = [data]
 
-            for event in events:
+            for event in data:
                 event_type = event.get("event_type")
-
-                if event_type in ("book", "tick_size_change"):
-                    asset_id = event.get("asset_id")
-                    if asset_id in self.asset_ids:
-                        self._update_shared_book(event)
-                elif event_type == "price_change":
-                    for price_change in event.get("price_changes", []):
-                        if price_change["asset_id"] in self.asset_ids:
-                            self.handle_price_changes(price_change)
+                if event_type in ("price_change", "book", "tick_size_change"):
+                    self.change_queue.put(event)
 
         except Exception as e:
             print(message)
@@ -123,10 +49,58 @@ class OrderBookFeed:
     def _on_close(self, ws, close_status_code, close_msg):
         print(f"WebSocket closed: {close_status_code} - {close_msg}")
 
+    def process_book_updates(self):
+        while not self.stopped:
+            while not self.change_queue.empty():
+                try:
+                    update = self.change_queue.get(timeout=1.0)
+                except queue.Empty:
+                    continue
+
+                if update["event_type"] == "price_change":
+                    for price_change in update["price_changes"]:
+                        asset_id = price_change["asset_id"]
+                        self.order_book[asset_id]["best_bid"] = float(price_change["best_bid"])
+                        self.order_book[asset_id]["best_ask"] = float(price_change["best_ask"])
+                        size = float(price_change["size"])
+                        price = float(price_change["price"])
+                        if price_change["side"] == "BUY":
+                            if size > 0:
+                                self.order_book[asset_id]["bids"][price] = size
+                            else:
+                                self.order_book[asset_id]["bids"].pop(price)
+
+                        else:
+                            if size > 0:
+                                self.order_book[asset_id]["asks"][price] = size
+                            else:
+                                self.order_book[asset_id]["asks"].pop(price)
+                else:
+                    asset_id = update["asset_id"]
+                    self.order_book[asset_id]["bids"].clear()
+                    self.order_book[asset_id]["asks"].clear()
+                    best_bid = 0
+                    best_ask = 1
+                    for bid in update.get("bids", []):
+                        size = float(bid["size"])
+                        price = float(bid["price"])
+                        self.order_book[asset_id]["bids"][price] = size
+                        best_bid = max(best_bid, price)
+                    for ask in update.get("asks", []):
+                        size = float(ask["size"])
+                        price = float(ask["price"])
+                        self.order_book[asset_id]["asks"][price] = size
+                        best_ask = min(best_ask, price)
+                    self.order_book[asset_id]["best_bid"] = best_bid
+                    self.order_book[asset_id]["best_ask"] = best_ask
+
+        return
+
     def run(self):
         """Executes the connection loop safely over the background thread."""
         self.socket_thread = threading.Thread(target=self.websocket_listen)
         self.socket_thread.start()
+        self.process_book_updates()
 
     def websocket_listen(self):
 
