@@ -250,8 +250,8 @@ class KStrategy(masterbot):
         edge_up = projected_up_value - self.up_price
         edge_down = projected_down_value - self.down_price
         desired_shares = int(self.get_usable_cash() / 20) * 5
-        desired_shares = min(desired_shares, self.data_provider.can_buy_with(self.up_token_id, self.get_usable_cash()))
-        desired_shares = min(desired_shares, self.data_provider.can_buy_with(self.down_token_id, self.get_usable_cash()))
+        #desired_shares = min(desired_shares, self.data_provider.can_buy_with(self.up_token_id, self.get_usable_cash()))
+        #desired_shares = min(desired_shares, self.data_provider.can_buy_with(self.down_token_id, self.get_usable_cash()))
         desired_shares = max(desired_shares, 5)
         if edge_up > self.edge_treshold * (1 + time_factor):
             self.manage_desired_inventory(desired_shares, 0, projected_up_value, projected_down_value)

@@ -1,4 +1,5 @@
 import json
+import threading
 import time
 import websocket
 
@@ -8,6 +9,7 @@ class OrderBookFeed:
         self.asset_ids = asset_ids
         self.order_book = order_book
         self.stopped = False
+        self.socket_thread = None
         self.ws = None
 
     def _update_shared_book(self, market_data):
@@ -123,8 +125,12 @@ class OrderBookFeed:
 
     def run(self):
         """Executes the connection loop safely over the background thread."""
+        self.socket_thread = threading.Thread(target=self.websocket_listen)
+        self.socket_thread.start()
+
+    def websocket_listen(self):
+
         websocket_url = "wss://ws-subscriptions-clob.polymarket.com/ws/market"
-        
         while not self.stopped:
             try:
                 self.ws = websocket.WebSocketApp(
@@ -144,11 +150,14 @@ class OrderBookFeed:
                 print(f"Reconnecting after socket failure: {e}")
             
             if not self.stopped:
-                time.sleep(5) 
+                time.sleep(1)
+        return
 
     def stop(self):
         """Kills the active connection gracefully."""
         self.stopped = True
+        if self.socket_thread:
+            self.socket_thread.join()
         if self.ws:
             try:
                 self.ws.close()
