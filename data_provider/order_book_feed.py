@@ -60,39 +60,43 @@ class OrderBookFeed:
                 if update["event_type"] == "price_change":
                     for price_change in update["price_changes"]:
                         asset_id = price_change["asset_id"]
-                        self.order_book[asset_id]["best_bid"] = float(price_change["best_bid"])
-                        self.order_book[asset_id]["best_ask"] = float(price_change["best_ask"])
+                        working_copy = {"bids": self.order_book[asset_id]["bids"], 
+                                        "asks": self.order_book[asset_id]["asks"], 
+                                        "best_bid": float(price_change["best_bid"]), 
+                                        "best_ask": float(price_change["best_ask"])
+                                        }
+                        self.order_book[asset_id] = working_copy
                         size = float(price_change["size"])
                         price = float(price_change["price"])
                         if price_change["side"] == "BUY":
                             if size > 0:
                                 self.order_book[asset_id]["bids"][price] = size
                             else:
-                                self.order_book[asset_id]["bids"].pop(price)
+                                self.order_book[asset_id]["bids"].pop(price, None)
 
                         else:
                             if size > 0:
                                 self.order_book[asset_id]["asks"][price] = size
                             else:
-                                self.order_book[asset_id]["asks"].pop(price)
+                                self.order_book[asset_id]["asks"].pop(price, None)
                 else:
                     asset_id = update["asset_id"]
-                    self.order_book[asset_id]["bids"].clear()
-                    self.order_book[asset_id]["asks"].clear()
+                    working_copy = {"bids": {}, "asks": {}}
                     best_bid = 0
                     best_ask = 1
                     for bid in update.get("bids", []):
                         size = float(bid["size"])
                         price = float(bid["price"])
-                        self.order_book[asset_id]["bids"][price] = size
+                        working_copy["bids"][price] = size
                         best_bid = max(best_bid, price)
                     for ask in update.get("asks", []):
                         size = float(ask["size"])
                         price = float(ask["price"])
-                        self.order_book[asset_id]["asks"][price] = size
+                        working_copy["asks"][price] = size
                         best_ask = min(best_ask, price)
-                    self.order_book[asset_id]["best_bid"] = best_bid
-                    self.order_book[asset_id]["best_ask"] = best_ask
+                    working_copy["best_bid"] = best_bid
+                    working_copy["best_ask"] = best_ask
+                    self.order_book[asset_id] = working_copy
 
         return
 
