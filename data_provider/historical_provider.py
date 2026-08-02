@@ -75,21 +75,35 @@ class historical_provider:
     
     #def get_up_token_id(self):
     
-    def get_asset(self, asset_id):
-        for _, asset in self.order_book:
-            if asset["asset_id"] == asset_id:
-                return asset
-        raise KeyError(f"Asset {asset_id} not found")
+    def get_asset(self, asset_id, side):
+        asset = self.order_book.get(asset_id, None)
+        if asset is None:
+            raise KeyError(f"Asset {asset_id} not found")
+        if side == "bids":
+            bids_map = asset.get("bids", {}).copy()
+            sorted_list_bids = sorted(bids_map.items(), key=lambda x: x[0])
+            sorted_list = []
+            for item in sorted_list_bids:
+                sorted_list.append({"price": item[0], "size": item[1]})
+            return sorted_list
+        
+        if side == "asks":
+            asks_map = asset.get("asks", {}).copy()
+            sorted_list_asks = sorted(asks_map.items(), key=lambda x: -x[0])
+            sorted_list = []
+            for item in sorted_list_asks:
+                sorted_list.append({"price": item[0], "size": item[1]})
+            return sorted_list
 
     def get_best_bid(self, asset_id):
-        bids = self.get_asset(asset_id).get("bids", [])
+        bids = self.get_asset(asset_id, "bids")
         if not bids or bids == []:
             return 0
         return float(bids[-1]["price"])
 
 
     def get_best_ask(self, asset_id):
-        asks = self.get_asset(asset_id).get("asks", [])
+        asks = self.get_asset(asset_id, "asks")
         if not asks or asks == []:
             return 1
         return float(asks[-1]["price"])
@@ -111,7 +125,7 @@ class historical_provider:
         return (bid + ask) / 2
 
     def sell_gain(self, asset_id, amount_to_sell): # sell_gain returns the gain of selling a given amount of shares, based on the current order book
-        bids = self.get_asset(asset_id).get("bids", [])
+        bids = self.get_asset(asset_id, "bids")
 
         remaining = amount_to_sell
         gain = 0.0
@@ -138,7 +152,7 @@ class historical_provider:
 
 
     def buy_cost(self, asset_id, amount_to_buy): # buy_cost returns the cost of buying a given amount of shares, based on the current order book
-        asks = self.get_asset(asset_id).get("asks", [])
+        asks = self.get_asset(asset_id, "asks")
 
         remaining = amount_to_buy
         cost = 0.0
@@ -165,11 +179,12 @@ class historical_provider:
 
 
     def can_buy_with(self, asset_id, investment): # can buy_with returns the amount of shares that can be bought with a given investment, based on the current order book
-        asks = self.get_asset(asset_id).get("asks", [])
+        asks = self.get_asset(asset_id, "asks")
 
         remaining_money = investment
         shares = 0.0
-        tick_size = float(self.get_asset(asset_id).get("tick_size", 0.01)) # defaults to 0.01
+        #tick_size = float(self.get_asset(asset_id).get("tick_size", 0.01)) # defaults to 0.01
+        tick_size = 0.01
         pointer = len(asks) - 1
 
         while remaining_money > 0 and pointer >= 0:
@@ -190,11 +205,11 @@ class historical_provider:
         return shares
 
     def total_bid_liquidity(self, asset_id): # total_bid_liquidity returns the total bid liquidity of an asset, based on the current order book
-        bids = self.get_asset(asset_id).get("bids", [])
+        bids = self.get_asset(asset_id, "bids")
         return sum(float(level["size"]) for level in bids)
 
     def total_ask_liquidity(self, asset_id): # total_ask_liquidity returns the total ask liquidity of an asset, based on the current order book
-        asks = self.get_asset(asset_id).get("asks", [])
+        asks = self.get_asset(asset_id, "asks")
         return sum(float(level["size"]) for level in asks)
 
 

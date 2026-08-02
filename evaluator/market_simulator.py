@@ -99,7 +99,7 @@ class market_simulator:
         return False
 
     def match_buy(self, asset_id, amount, wanted_price, available_cash):
-        asks = self.data_provider.get_asset(asset_id).get("asks", [])
+        asks = self.data_provider.get_asset(asset_id, "asks")
         successful_matches = 0
         remaining = amount
         cost = 0.0
@@ -129,7 +129,7 @@ class market_simulator:
         return (cost, successful_matches, update_asks)
 
     def match_sell(self, asset_id, amount, wanted_price):
-        bids = self.data_provider.get_asset(asset_id).get("bids", [])
+        bids = self.data_provider.get_asset(asset_id, "bids")
         successful_matches = 0
         remaining = amount
         gain = 0.0
