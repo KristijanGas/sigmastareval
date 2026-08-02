@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 import re
 
@@ -64,4 +64,37 @@ def extract_timestamp(filename: str) -> int:
     )
 
     return int(dt.timestamp())
+
+import re
+from datetime import date, datetime
+
+# Extracts the calendar date written in a market filename (+6 hours to match CET)
+# filename examples: bitcoin-up-or-down-july-10-2026-9am-et.analysis.json,
+#    ethereum-up-or-down-july-9-2026-4pm-et.gz or similar
+def extract_market_date(filename: str) -> date:
+    pattern = re.compile(
+        r"(january|february|march|april|may|june|july|august|"
+        r"september|october|november|december)-"
+        r"(\d{1,2})-"
+        r"(\d{4})-"
+        r"(\d{1,2})(am|pm)-et",
+        re.IGNORECASE,
+    )
+
+    match = pattern.search(filename)
+    if not match:
+        raise ValueError(f"Could not extract market date from: {filename}")
+
+    #print(match.groups())
+    month, day, year,hour,am_pm = match.groups()
+
+
+    dt = datetime.strptime(f"{month} {day} {year} {hour}{am_pm}", "%B %d %Y %I%p")
+    dt += timedelta(hours=6)
+
+    return dt.date()
+
+
+
+#extract_market_date("ethereum-up-or-down-july-10-2026-12pm-et.analysis.json")
 

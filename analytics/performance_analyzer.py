@@ -33,6 +33,7 @@ class PerformanceAnalyzer:
         self.performance_result.trade_count = self.trade_count()
         self.performance_result.final_cash = self.data["final_cash"]
         self.performance_result.total_fees_paid = self.total_fees_paid()  # multiply by x to scale on graph
+        self.performance_result.market_name = self.analytics_path.name
         #self.run_decision_quality_methods()
         #self.plot_equity_breakdown()
         #draw_graph(self.data, show=True)
