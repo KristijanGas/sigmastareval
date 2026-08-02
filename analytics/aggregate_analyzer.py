@@ -1,8 +1,12 @@
+from dataclasses import dataclass
+from datetime import date
 from analytics.performance_result import PerformanceResult
 from statistics import geometric_mean, mean, median, stdev
 import matplotlib.pyplot as plt
 import math
 import numpy as np
+
+from evaluator.utils.utils import extract_market_date
 
 #analyzes data from the whole dataset
 class AggregateAnalyzer:
@@ -13,6 +17,7 @@ class AggregateAnalyzer:
     def analyze(self):
         #print(self.profitable_markets())
         self.output_table()
+        self.output_daily_summaries()
         #self.plot_final_cash_distribution()
         return None
 
@@ -20,10 +25,13 @@ class AggregateAnalyzer:
         self.results.append(result)
 
 
-    def average_roi(self):
-        if len(self.results) == 0:
+    def average_roi(self, results=None):
+        if results is None:
+            results = self.results
+
+        if len(results) == 0:
             return 0
-        rois = [r.roi + 1 for r in self.results]
+        rois = [r.roi + 1 for r in results]
         for i in range(len(rois)):
             if rois[i] <= 0:
                 rois[i] = 1e-10  # Replace non-positive values with a small positive number
@@ -51,10 +59,12 @@ class AggregateAnalyzer:
         return max(r.roi for r in self.results)
     
 
-    def average_pnl(self):
-        if len(self.results) == 0:
+    def average_pnl(self, results=None):
+        if results is None:
+            results = self.results
+        if len(results) == 0:
             return 0
-        return mean(r.pnl for r in self.results)
+        return mean(r.pnl for r in results)
     
     def median_pnl(self):
         if len(self.results) == 0:
@@ -98,6 +108,14 @@ class AggregateAnalyzer:
             return stdev(r.max_drawdown for r in self.results)
         else:
             return None
+        
+    #area between the curve and y=0
+    def negative_sum(self):
+        losing_markets = [r.pnl for r in self.results if r.pnl < 0]
+        if len(losing_markets) == 0:
+            return 0
+        else:
+            return sum(losing_markets)
     
     # highest max drawdown (across all tested markets)
     def worst_drawdown(self):
@@ -237,6 +255,38 @@ class AggregateAnalyzer:
     
     def markets_tested(self):
         return len(self.results)
+    
+    def get_daily_summaries(self):
+        daily_results: dict[date, list] = {}
+        for r in self.results:
+            market_date = extract_market_date(r.market_name)
+            if daily_results.get(market_date) is None:
+                daily_results[market_date] = []
+            daily_results[market_date].append(r)
+        
+        daily_summaries: list[DailySummary] = []
+        for market_date in sorted(daily_results.keys()):
+            results = daily_results[market_date]
+
+            markets_tested = len(results)
+            profitable_markets = sum(r.pnl > 0 for r in results)
+            daily_summary = DailySummary(
+                market_date=market_date,
+                markets_tested=markets_tested,
+                total_pnl=sum(r.pnl for r in results),
+                average_pnl=self.average_pnl(results),
+                average_roi=self.average_roi(results),
+                median_roi=median(r.roi for r in results),
+                profitable_markets=profitable_markets,
+                profitable_market_rate=profitable_markets/markets_tested,
+                average_max_drawdown=mean(r.max_drawdown for r in results)
+            )
+            daily_summaries.append(daily_summary)
+        return daily_summaries
+            
+            
+        
+
     
     #just for testing
     def output_table(self):
@@ -411,3 +461,75 @@ class AggregateAnalyzer:
         plt.legend()
         plt.tight_layout()
         plt.show()
+
+
+    def output_daily_summaries(self):
+        daily_summaries = self.get_daily_summaries()
+
+        daily_columns = [
+            "Date",
+            "Markets",
+            "Total PnL",
+            "Avg PnL",
+            "Avg ROI",
+            "Median ROI",
+            "Profitable",
+            "Avg Drawdown",
+        ]
+
+        daily_values = [
+            [
+                summary.market_date.strftime("%B %d, %Y"),
+                summary.markets_tested,
+                f"{summary.total_pnl:.2f}",
+                f"{summary.average_pnl:.2f}",
+                f"{summary.average_roi:.2%}",
+                f"{summary.median_roi:.2%}",
+                (
+                    f"{summary.profitable_markets}/{summary.markets_tested} "
+                    f"({summary.profitable_market_rate:.1%})"
+                ),
+                f"{summary.average_max_drawdown:.2%}",
+            ]
+            for summary in daily_summaries
+        ]
+
+
+        fig = plt.figure(figsize=(11, 10))
+        gs = fig.add_gridspec(
+            nrows=2,
+            ncols=1,
+            height_ratios=[7,3]
+        )
+
+        fig.suptitle("Daily Summaries", fontsize=18, fontweight="bold")
+
+        ax_table = fig.add_subplot(gs[0, :])
+        ax_table.axis("off")
+        daily_table = ax_table.table(
+            cellText=daily_values,
+            colLabels=daily_columns,
+            cellLoc="center",
+            bbox=[0.0, 0.02, 1.0, 0.6],
+        )
+
+        # daily_table.auto_set_font_size(False)
+        # daily_table.set_fontsize(12)
+        # daily_table.scale(1, 1.5)
+
+        plt.tight_layout(rect=[0, 0, 1, 0.96])
+        plt.show()
+
+
+
+@dataclass
+class DailySummary:
+    market_date: date
+    markets_tested: int
+    total_pnl: float
+    average_pnl: float
+    average_roi: float
+    median_roi: float
+    profitable_markets: int
+    profitable_market_rate: float
+    average_max_drawdown: float
