@@ -124,7 +124,7 @@ class OrderBookFeed:
                 )
                 
                 self.ws.run_forever(
-                    ping_interval=10,
+                    ping_interval=8,
                     ping_timeout=5
                 )
                 

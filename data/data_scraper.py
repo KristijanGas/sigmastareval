@@ -20,9 +20,7 @@ if __package__ is None or __package__ == "":
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-
-from data_provider.binance_price_feed import BinancePriceFeed
-
+from data_provider.live_provider import live_provider
 #markets = ["bitcoin-up-or-down"]
 #https://gamma-api.polymarket.com/events?slug=bitcoin-up-or-down-june-30-2026-2pm-et
 #https://clob.polymarket.com/book?token_id=54723568072009946861830956098453721516917366403655545781627131273815785194717 # token moras izvadit iz ovog prvog i onda koristit
@@ -54,32 +52,19 @@ def get_current_market_names(time_name,market):
         market_metadata = None
     return market_metadata
 
-def get_clob_data(market_metadata):
+def get_clob_data(market_metadata, provider):
     clob_token_ids = json.loads(market_metadata[0]["markets"][0]["clobTokenIds"])
     clobs = []
     for i in range(len(clob_token_ids)):
         token_id = clob_token_ids[i]
-        path = f"https://clob.polymarket.com/book?token_id={token_id}"
-        
-        request = urllib.request.Request(
-            path,
-            headers={
-                "User-Agent": "Mozilla/5.0",
-                "Accept": "application/json, text/plain, */*",
-                "Referer": "https://polymarket.com/",
-            },
-        )
-        try:
-            with urllib.request.urlopen(request, timeout=20) as url:
-                market_data = json.loads(url.read().decode())
-        except Exception as e:
-            print(f"Error fetching CLOB data for token_id {token_id}: {e}")
-            market_data = None
+        market_data = {}
+        market_data["bids"] = provider.get_asset(token_id, "bids")
+        market_data["asks"] = provider.get_asset(token_id, "asks")
         clobs.append((token_id,market_data))
     return clobs
 
 
-def store_data(data, time_name,market):
+def store_data(data, time_name, market):
 
     store_path = f"datasets/{market}/{market}-{time_name}.gz"
     os.makedirs(os.path.dirname(store_path), exist_ok=True)
@@ -104,8 +89,16 @@ def __main__():
     print(old_time_name)
     data = {"metadata_start": markets_metadata, "all_clobs": [], "all_prices": [], "metadata_end": None}
     ind = 0
-    crypto_value_feed = BinancePriceFeed(market_binance)
-    crypto_value_feed.start()
+
+    provider = live_provider(market, market_binance, market_type, None)
+    provider_thread = threading.Thread(target=provider.run, daemon=True)
+    provider_thread.start()
+    if market_type == "hourly":
+        time_name = parse_time_name_hourly()["hourly_name"]
+    elif market_type == "5m":
+        time_name = parse_time_name_5m()
+    provider.set_market(time_name)
+
     while 1:
         if market_type == "hourly":
             time_name = parse_time_name_hourly()["hourly_name"]
@@ -115,8 +108,9 @@ def __main__():
         if (time_name != old_time_name):
             markets_metadata_old = get_current_market_names(old_time_name, market)
             data["metadata_end"] = markets_metadata_old
-            data["all_prices"] = crypto_value_feed.consume()  # Get the latest prices
+            data["all_prices"] = provider.consume_crypto_values()
             store_data(data,old_time_name,market)
+            provider.set_market(time_name)
 
             #new batch
             markets_metadata = get_current_market_names(time_name, market)
@@ -127,15 +121,15 @@ def __main__():
 
         market_metadata = data["metadata_start"]
         try:
-            clobs = get_clob_data(market_metadata)
-            data["all_clobs"].append(clobs)
+            clobs = get_clob_data(market_metadata, provider)
+            if len(data["all_clobs"]) == 0 or data["all_clobs"][-1] != clobs:
+                data["all_clobs"].append(clobs)
+                print(len(data["all_clobs"]))
         except Exception as e:
             print(f"Error occurred while fetching CLOB data for {market}: {e}")
-
+        time.sleep(0.05)
         ind += 1
-        print(time_name, market_binance)
-        
-
-
+        if ind % 100 == 0:
+            print(time_name, market_binance)
 
 __main__()
