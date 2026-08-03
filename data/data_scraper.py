@@ -124,7 +124,6 @@ def __main__():
             clobs = get_clob_data(market_metadata, provider)
             if len(data["all_clobs"]) == 0 or data["all_clobs"][-1] != clobs:
                 data["all_clobs"].append(clobs)
-                print(len(data["all_clobs"]))
         except Exception as e:
             print(f"Error occurred while fetching CLOB data for {market}: {e}")
         time.sleep(0.05)
