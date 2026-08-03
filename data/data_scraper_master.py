@@ -13,7 +13,7 @@ import time
 
 markets = [("bitcoin-up-or-down","BTCUSDT", "hourly"),("ethereum-up-or-down","ETHUSDT", "hourly"),
            ("solana-up-or-down","SOLUSDT", "hourly"),("xrp-up-or-down","XRPUSDT", "hourly"),
-           #("btc-updown-5m","BTCUSDT", "5m"),("eth-updown-5m","ETHUSDT", "5m")
+           ("btc-updown-5m","BTCUSDT", "5m"),("eth-updown-5m","ETHUSDT", "5m")
            ]
 
 processes = []

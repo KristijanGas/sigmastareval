@@ -24,8 +24,12 @@ from data_provider.historical_provider import historical_provider
 
 
 class live_provider(historical_provider):
-    def __init__(self, market_slug_base, binance_symbol, market_type , market):
-        self.binance_feed = BinancePriceFeed(binance_symbol, correct_timestamps=True)
+    def __init__(self, market_slug_base, binance_symbol, market_type, market):
+        self.scraper_only = False
+        if market is None:
+            self.scraper_only = True
+        print(f"Live provider, {market_slug_base}, scraper only: {self.scraper_only}")
+        self.binance_feed = BinancePriceFeed(binance_symbol, not self.scraper_only)
         self.binance_feed.start()
         self.market = market
         self.market_slug_base = market_slug_base
@@ -76,18 +80,21 @@ class live_provider(historical_provider):
                     if self.order_book_feed_thread is not None and self.order_book_feed_thread.is_alive():
                         self.order_book_feed.stop()
                         self.order_book_feed_thread.join()
-                    print(f"Stopped order book feed for {self.market_slug_base} at {time_name}")
-                    self.set_market(time_name)
+                        print(f"Stopped order book feed for {self.market_slug_base} at {time_name}")
+                    if not self.scraper_only:
+                        self.set_market(time_name)
                     #self.binance_feed.consume()
-                
-                self.metadata = self.get_metadata(time_name, self.market_slug_base)
-                try:
-                    self.set_price_to_beat(self.metadata[0]["eventMetadata"]["priceToBeat"])
-                except Exception as e:
-                    #print(f"Error setting price to beat: {e}")
-                    #print(self.metadata[0])
-                    pass
-                self.update_moving_mean()
+                if not self.scraper_only:
+                    self.metadata = self.get_metadata(time_name, self.market_slug_base)
+                    try:
+                        self.set_price_to_beat(self.metadata[0]["eventMetadata"]["priceToBeat"])
+                    except Exception as e:
+                        #print(f"Error setting price to beat: {e}")
+                        #print(self.metadata[0])
+                        pass
+                    self.update_moving_mean()
+                else:
+                    time.sleep(1)
                 #time.sleep(0.1)  # Sleep for a second before the next iteration
                 #print(self.get_best_bid(self.up_token_id), self.get_best_bid(self.down_token_id), self.get_best_ask(self.up_token_id), self.get_best_ask(self.down_token_id), self.get_crypto_value(), self.get_price_to_beat(), self.get_current_timestamp(), self.get_end_timestamp())
             #except Exception as e:
@@ -142,8 +149,9 @@ class live_provider(historical_provider):
                 self.up_token_id = self.token_ids[i]
             elif outcome_name_list[i] == "Down":
                 self.down_token_id = self.token_ids[i]
-        for token_id in self.token_ids:
-            self.market.set_min_order_size(token_id, self.metadata[0]["markets"][0]["orderMinSize"])
+        if not self.scraper_only:
+            for token_id in self.token_ids:
+                self.market.set_min_order_size(token_id, self.metadata[0]["markets"][0]["orderMinSize"])
 
         self.order_book_feed = OrderBookFeed([self.up_token_id, self.down_token_id], self.order_book)
 
