@@ -134,11 +134,12 @@ class replay_engine:
         crypto_never_set = True
         book_index = 0
         self.bot.first_run_setup()
+        correct_book = 0
         starting_timestamp = data["all_prices"][crypto_index]["timestamp"]
         step_ms = 251
         for current_timestamp in range(starting_timestamp, self.data_provider.get_end_timestamp() + step_ms, step_ms):
             self.data_provider.set_current_timestamp(current_timestamp)
-            skip = 0
+            
             while book_index < len(data["all_clobs"]):
                 if data["all_clobs"][book_index] is None:
                     book_index += 1
@@ -159,7 +160,7 @@ class replay_engine:
                     break
                 else:
                     order_book = data["all_clobs"][book_index]
-                    self.data_provider.set_order_book(order_book)
+                    correct_book = self.data_provider.set_order_book(order_book)
                     book_never_set = False
                     book_index += 1
 
@@ -178,13 +179,9 @@ class replay_engine:
                     crypto_never_set = False
                     crypto_index += 1
             
-            if crypto_never_set or book_never_set:
+            if crypto_never_set or book_never_set or not correct_book:
                 continue
-            for _, asset in self.data_provider.get_order_book():
-                if asset is None:
-                    skip = 1
-            if skip:
-                continue
+
             self.data_provider.update_moving_mean()
             asset_ids = self.data_provider.get_market_asset_ids()
             for asset_id in asset_ids:

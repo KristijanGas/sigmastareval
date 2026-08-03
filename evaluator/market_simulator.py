@@ -16,7 +16,7 @@ class market_simulator:
         self.on_chain_delay = 2000
         self.matching_delay = 270
         self.new_order = {}
-        self.should_update_order_book = True
+        self.should_update_order_book = False
         # order control
         self.last_placed_order_type = {}
         self.order_timeout = 1000

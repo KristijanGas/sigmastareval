@@ -5,7 +5,7 @@ import numpy as np
 
 class historical_provider:
     def __init__(self, metadata):
-        self.order_book = None
+        self.order_book = {}
         self.crypto_value = None
         self.price_to_beat = None
         self.end_timestamp = None
@@ -259,8 +259,18 @@ class historical_provider:
         return self.moving_mean
 
     def set_order_book(self, order_book):
-        self.order_book = order_book
-    
+        for asset in order_book:
+            self.order_book[asset[0]] = {}
+            self.order_book[asset[0]]["bids"] = {}
+            self.order_book[asset[0]]["asks"] = {}
+            if asset[1] is None:
+                return 0
+            for level in asset[1].get("bids", []):
+                self.order_book[asset[0]]["bids"][float(level["price"])] = float(level["size"])
+            for level in asset[1].get("asks", []):
+                self.order_book[asset[0]]["asks"][float(level["price"])] = float(level["size"])
+        return 1
+
     def set_price_to_beat(self, price_to_beat):
         self.price_to_beat = price_to_beat
 
