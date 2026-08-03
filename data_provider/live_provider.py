@@ -76,7 +76,7 @@ class live_provider(historical_provider):
                     if self.order_book_feed_thread is not None and self.order_book_feed_thread.is_alive():
                         self.order_book_feed.stop()
                         self.order_book_feed_thread.join()
-
+                    print(f"Stopped order book feed for {self.market_slug_base} at {time_name}")
                     self.set_market(time_name)
                     #self.binance_feed.consume()
                 
@@ -118,6 +118,7 @@ class live_provider(historical_provider):
 
     def set_market(self, time_name):
         self.set_price_to_beat(self.get_crypto_value())
+        #print(f"Set price to beat {self.get_crypto_value()}")
         self.consume_crypto_values()
         self.moving_mean_sum = 0.0
         self.moving_mean = None
