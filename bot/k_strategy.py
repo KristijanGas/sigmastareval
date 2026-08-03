@@ -93,12 +93,10 @@ class KStrategy(masterbot):
         dif_down_shares = wanted_down_shares - self.down_shares
         if dif_up_shares > 0:
             dif_up_shares = min(dif_up_shares, self.data_provider.can_buy_with(self.up_token_id, self.get_usable_cash()))
-            up_ask_price = self.data_provider.get_best_ask(self.up_token_id)
-            self.place_order_with_cash_check(OrderType.GTD, self.up_token_id, OrderAction.BID, dif_up_shares, up_ask_price + 0.02, timeout=1000)
+            self.place_order_with_cash_check(OrderType.GTD, self.up_token_id, OrderAction.BID, dif_up_shares, self.up_price + 0.02, timeout=1000)
         if dif_down_shares > 0:
             dif_down_shares = min(dif_down_shares, self.data_provider.can_buy_with(self.down_token_id, self.get_usable_cash()))
-            down_ask_price = self.data_provider.get_best_ask(self.down_token_id)
-            self.place_order_with_cash_check(OrderType.GTD, self.down_token_id, OrderAction.BID, dif_down_shares, down_ask_price + 0.02, timeout=1000)
+            self.place_order_with_cash_check(OrderType.GTD, self.down_token_id, OrderAction.BID, dif_down_shares, self.down_price + 0.02, timeout=1000)
         if dif_up_shares < 0:
             self.place_order_with_cash_check(OrderType.GTD, self.up_token_id, OrderAction.ASK, -dif_up_shares, max(projected_up_value,0.01), timeout=1000)
         if dif_down_shares < 0:

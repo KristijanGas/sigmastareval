@@ -101,6 +101,7 @@ class market_simulator:
     def match_buy(self, asset_id, amount, wanted_price, available_cash):
         asks = self.data_provider.get_asset(asset_id, "asks")
         successful_matches = 0
+        total_fee = 0.0
         remaining = amount
         cost = 0.0
 
@@ -111,7 +112,7 @@ class market_simulator:
 
             price = float(level["price"])
             if price > wanted_price:
-                return (cost, successful_matches, update_asks)
+                return (cost, successful_matches, update_asks, total_fee)
             size = float(level["size"])
 
             traded = min(size, remaining)
@@ -121,16 +122,18 @@ class market_simulator:
             cost += traded * price
             remaining -= traded
             successful_matches += traded
+            total_fee += self.calculate_fee(price, traded)
             update_asks[price] = size - traded
             if remaining == 0:
-                return (cost, successful_matches, update_asks)
+                return (cost, successful_matches, update_asks, total_fee)
 
             pointer -= 1
-        return (cost, successful_matches, update_asks)
+        return (cost, successful_matches, update_asks, total_fee)
 
     def match_sell(self, asset_id, amount, wanted_price):
         bids = self.data_provider.get_asset(asset_id, "bids")
         successful_matches = 0
+        total_fee = 0.0
         remaining = amount
         gain = 0.0
         update_bids = {}
@@ -141,19 +144,20 @@ class market_simulator:
 
             price = float(level["price"])
             if price < wanted_price:
-                return (gain, successful_matches, update_bids)
+                return (gain, successful_matches, update_bids, total_fee)
             size = float(level["size"])
 
             traded = min(size, remaining)
             gain += traded * price
             remaining -= traded
             successful_matches += traded
+            total_fee += self.calculate_fee(price, traded)
             update_bids[price] = size - traded
             if remaining == 0:
-                return (gain, successful_matches, update_bids)
+                return (gain, successful_matches, update_bids, total_fee)
 
             pointer -= 1
-        return (gain, successful_matches, update_bids)
+        return (gain, successful_matches, update_bids, total_fee)
 
     def accept_orders(self):
         current_timestamp = self.data_provider.get_current_timestamp()
@@ -197,7 +201,7 @@ class market_simulator:
                     continue
 
                 if order_action == OrderAction.BID:
-                    money_spent, successful_matches, update_asks = self.match_buy(asset_id, order_size, price, self.current_cash)
+                    money_spent, successful_matches, update_asks, total_fee = self.match_buy(asset_id, order_size, price, self.current_cash)
                     successful_matches = round(successful_matches, 2)
                     money_spent = round(money_spent, 8)
                     self.current_cash -= money_spent
@@ -207,7 +211,7 @@ class market_simulator:
                         self.order_matches.append(on_chain_update)
 
                 elif order_action == OrderAction.ASK:
-                    money_earned, successful_matches, update_bids = self.match_sell(asset_id, min(order_size, self.user_holdings.get(asset_id, 0)), price)
+                    money_earned, successful_matches, update_bids, total_fee = self.match_sell(asset_id, min(order_size, self.user_holdings.get(asset_id, 0)), price)
                     successful_matches = round(successful_matches, 2)
                     money_earned = round(money_earned, 8)
                     #self.current_cash += money_earned
@@ -224,7 +228,7 @@ class market_simulator:
 
             if order_type == OrderType.FOK:
                 if order_action == OrderAction.BID:
-                    money_spent, successful_matches, potential_update_asks = self.match_buy(asset_id, order_size, price, self.current_cash)
+                    money_spent, successful_matches, potential_update_asks, total_fee = self.match_buy(asset_id, order_size, price, self.current_cash)
                     successful_matches = round(successful_matches, 2)
                     if successful_matches == order_size:
                         self.current_cash -= money_spent
@@ -234,9 +238,12 @@ class market_simulator:
                         update_asks = potential_update_asks
                         if successful_matches > 0:
                             self.order_matches.append(on_chain_update)
+                    else:
+                        successful_matches = 0
+                        total_fee = 0
 
                 elif order_action == OrderAction.ASK:
-                    money_earned, successful_matches, potential_update_bids = self.match_sell(asset_id, min(order_size, self.user_holdings.get(asset_id, 0)), price)
+                    money_earned, successful_matches, potential_update_bids, total_fee = self.match_sell(asset_id, min(order_size, self.user_holdings.get(asset_id, 0)), price)
                     if successful_matches == order_size:
                         #self.current_cash += money_earned
                         on_chain_update["price"] = money_earned
@@ -245,17 +252,19 @@ class market_simulator:
                         update_bids = potential_update_bids
                         if successful_matches > 0:
                             self.order_matches.append(on_chain_update)
+                    else:
+                        successful_matches = 0
+                        total_fee = 0
                 else:
                     raise ValueError(f"Unknown order action: {order_action}")
                 #self.orders.remove(order) # fills entirely or dies instantly
                 orderIDs_to_remove.append(order["order_id"])
-            fee = 0
             self.user_holdings[asset_id] = round(self.user_holdings.get(asset_id, 0), 2)
-            if self.new_order.get(order["order_id"], False):
-                fee = self.calculate_fee(price, successful_matches)
-                self.current_cash -= fee
+
             successful_matches = round(successful_matches, 2)
             if successful_matches > 0:
+                if self.new_order.get(order["order_id"], False):
+                    self.current_cash -= total_fee
                 #print(f"Order {order['order_id']} matched {successful_matches} shares of asset {asset_id} at price {price}. Current cash: {self.current_cash:.2f}, User holdings: {self.user_holdings.get(asset_id, 0)}")
                 self.transactions.append(
                     {
@@ -265,7 +274,7 @@ class market_simulator:
                         "order_type": order_type,
                         "successful_matches": successful_matches,
                         "money_change": self.current_cash - cash_before_this_order,
-                        "fee": fee,
+                        "fee": total_fee,
                         "price": price,
                         "money_after_order": self.current_cash,
                         "user_holdings_after_order": self.user_holdings.get(asset_id, 0),
