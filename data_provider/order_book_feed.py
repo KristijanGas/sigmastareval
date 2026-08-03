@@ -56,6 +56,8 @@ class OrderBookFeed:
                     update = self.change_queue.get(timeout=1.0)
                 except queue.Empty:
                     continue
+                if self.stopped:
+                    return
                 try:
                     if update["event_type"] == "price_change":
                         for price_change in update["price_changes"]:
@@ -136,10 +138,10 @@ class OrderBookFeed:
     def stop(self):
         """Kills the active connection gracefully."""
         self.stopped = True
-        if self.socket_thread:
-            self.socket_thread.join()
         if self.ws:
             try:
                 self.ws.close()
             except Exception:
                 pass
+        if self.socket_thread:
+            self.socket_thread.join()
