@@ -13,4 +13,15 @@ class PerformanceResult:
     equity_curve: list[tuple[int,float]]
     final_cash: float
     total_fees_paid: float
+    winrate: float
+    avg_trade_profit: float
+    median_trade_profit: float
+    largest_gain: float
+    largest_loss: float
+    time_before_exp_min: float
+    fees_to_balance: float
+    profit_lost_to_fees: float
+    fee_efficiency: float
+    turnover: float
+    total_traded_volume: float
     #adding more later
