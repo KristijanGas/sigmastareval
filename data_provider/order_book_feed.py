@@ -124,7 +124,7 @@ class OrderBookFeed:
                 )
                 
                 self.ws.run_forever(
-                    ping_interval=8,
+                    ping_interval=10,
                     ping_timeout=5
                 )
                 
@@ -132,7 +132,7 @@ class OrderBookFeed:
                 print(f"Reconnecting after socket failure: {e}")
             
             if not self.stopped:
-                time.sleep(1)
+                time.sleep(0.2)
         return
 
     def stop(self):
