@@ -60,6 +60,7 @@ def get_clob_data(market_metadata, provider):
         market_data = {}
         market_data["bids"] = provider.get_asset(token_id, "bids")
         market_data["asks"] = provider.get_asset(token_id, "asks")
+        market_data["timestamp"] = provider.get_current_timestamp()
         clobs.append((token_id,market_data))
     return clobs
 
