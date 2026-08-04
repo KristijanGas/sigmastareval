@@ -84,6 +84,27 @@ class replay_engine:
 
         return True
 
+    def get_order_book_timestamp(self, data, book_index, clob_token_ids):
+        order_book_timestamp = None
+        if len(data["all_clobs"][book_index]) > 1:
+            if type(data["all_clobs"][book_index]) == list:
+                if data["all_clobs"][book_index][0][1] is not None:
+                    order_book_timestamp = data["all_clobs"][book_index][0][1]["timestamp"]
+                if data["all_clobs"][book_index][1][1] is not None:
+                    if order_book_timestamp is not None:
+                        order_book_timestamp = max(order_book_timestamp, data["all_clobs"][book_index][1][1]["timestamp"])
+                    else:
+                        order_book_timestamp = data["all_clobs"][book_index][1][1]["timestamp"]
+
+            elif type(data["all_clobs"][book_index]) == dict:
+                if data["all_clobs"][book_index][clob_token_ids[0]] is not None:
+                    order_book_timestamp = data["all_clobs"][book_index][clob_token_ids[0]]["timestamp"]
+                elif data["all_clobs"][book_index][clob_token_ids[1]] is not None:
+                    if order_book_timestamp is not None:
+                        order_book_timestamp = max(order_book_timestamp, data["all_clobs"][book_index][clob_token_ids[1]]["timestamp"])
+                    else:
+                        order_book_timestamp = data["all_clobs"][book_index][clob_token_ids[1]]["timestamp"]
+        return order_book_timestamp
 
     def evaluate_datapoint(self, data, filename, starting_cash=100):
         """
@@ -136,7 +157,7 @@ class replay_engine:
         self.bot.first_run_setup()
         correct_book = 0
         starting_timestamp = data["all_prices"][crypto_index]["timestamp"]
-        step_ms = 251
+        step_ms = 5
         for current_timestamp in range(starting_timestamp, self.data_provider.get_end_timestamp() + step_ms, step_ms):
             self.data_provider.set_current_timestamp(current_timestamp)
             
@@ -144,14 +165,7 @@ class replay_engine:
                 if data["all_clobs"][book_index] is None:
                     book_index += 1
                     continue
-                order_book_timestamp = None
-                if data["all_clobs"][book_index][0][1] is not None:
-                    order_book_timestamp = data["all_clobs"][book_index][0][1]["timestamp"]
-                if data["all_clobs"][book_index][1][1] is not None:
-                    if order_book_timestamp is not None:
-                        order_book_timestamp = max(order_book_timestamp, data["all_clobs"][book_index][1][1]["timestamp"])
-                    else:
-                        order_book_timestamp = data["all_clobs"][book_index][1][1]["timestamp"]
+                order_book_timestamp = self.get_order_book_timestamp(data, book_index, clobTokenIds)
                 if order_book_timestamp is None:
                     book_index += 1
                     continue
