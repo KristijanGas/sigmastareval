@@ -34,6 +34,19 @@ class PerformanceAnalyzer:
         self.performance_result.final_cash = self.data["final_cash"]
         self.performance_result.total_fees_paid = self.total_fees_paid()  # multiply by x to scale on graph
         self.performance_result.market_name = self.analytics_path.name
+        self.performance_result.winrate = self.winrate()
+        self.performance_result.avg_trade_profit = self.average_trade_profit()
+        self.performance_result.median_trade_profit = self.median_trade_profit()
+        self.performance_result.largest_gain = self.largest_gain()
+        self.performance_result.largest_loss = self.largest_loss()
+        self.performance_result.time_before_exp_min = self.time_before_expiration()
+        self.performance_result.fees_to_balance = self.fees_to_initial_balance_ratio()
+        self.performance_result.profit_lost_to_fees = self.profit_lost_to_fees()
+        self.performance_result.fee_efficiency = self.fee_efficiency()
+        self.performance_result.turnover = self.turnover()
+        self.performance_result.total_traded_volume = self.total_traded_volume()
+
+
         #self.run_decision_quality_methods()
         #self.plot_equity_breakdown()
         #draw_graph(self.data, show=True)
@@ -134,7 +147,10 @@ class PerformanceAnalyzer:
             return None
         
         wins = sum(trade["profit"] > 0 for trade in self.closed_trades)
-        return wins / len(self.closed_trades)
+        if len(self.closed_trades) > 0:
+            return wins / len(self.closed_trades)
+        else:
+            return None
     
     def average_trade_profit(self):
         if not self.closed_trades:
@@ -218,7 +234,8 @@ class PerformanceAnalyzer:
     def profit_lost_to_fees(self):
         total_fees = self.total_fees_paid()
         gross_pnl = self.pnl() + total_fees
-        return total_fees / gross_pnl
+        if gross_pnl > 0:
+            return total_fees / gross_pnl
 
     # how much money did the bot earn for every dollar spent on fees
     def fee_efficiency(self):
