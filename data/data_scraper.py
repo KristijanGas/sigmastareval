@@ -127,7 +127,7 @@ def __main__():
                 data["all_clobs"].append(clobs)
         except Exception as e:
             print(f"Error occurred while fetching CLOB data for {market}: {e}")
-        time.sleep(0.05)
+        time.sleep(0.025)
         ind += 1
         if ind % 100 == 0:
             print(time_name, market_binance)
