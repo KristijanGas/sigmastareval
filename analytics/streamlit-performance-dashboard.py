@@ -126,7 +126,7 @@ def build_aggregate_analyzer(results: dict[str, Any]) -> AggregateAnalyzer:
 
 
 def metric_card(label: str, value: Any, *, kind: str = "number", help_text: str | None = None) -> None:
-   st.metric(label, display_value(value, kind=kind), help=help_text)
+   st.metric(label, display_value(value, kind=kind), help=help_text, border=True)
 
 def display_value(value: Any, *, kind: str = "number") -> str:
    value = finite_or_none(value)
@@ -292,8 +292,39 @@ def render_aggregate(frame: pd.DataFrame, results: dict[str, Any], initial_balan
    with second_row[4]:
       metric_card("No-trade rate", no_trade_rate, kind="percent")
 
-   overview_tab, markets_tab, daily_tab = st.tabs(
-      ["Overview", "Markets", "Daily"]
+   
+   # with third_row[0]:
+   #    st.plotly_chart(
+   #       gauge_chart(
+   #          title="Profitable Markets", 
+   #          value=(aggregate.profitable_markets()*100),
+   #          minimum=0,
+   #          maximum=100,
+   #          suffix="%"),
+            
+   #       width="stretch",
+   #       config={"displayModeBar": False})
+      
+
+   third_row = st.columns(2)
+   with third_row[0]:
+      profitable = int((frame["pnl"] > 0).sum())
+      losing = int((frame["pnl"] < 0).sum())
+      even = int((frame["pnl"] == 0).sum())
+      st.plotly_chart(
+         pie_chart(
+            title="Market Outcomes",
+            labels=["Profitable", "Losing", "Even"],
+            values=[profitable, losing, even]
+         )
+      )
+
+   with third_row[1]:
+      st.plotly_chart(distribution_histogram(values=frame["roi"]*100, title="ROI Distribution"))
+      
+      
+   overview_tab, markets_tab, daily_tab, diagnostics_tab= st.tabs(
+      ["Overview", "Markets", "Daily", "Diagnostics"]
    )
 
    with overview_tab:
@@ -364,6 +395,35 @@ def render_aggregate(frame: pd.DataFrame, results: dict[str, Any], initial_balan
                   "average_max_drawdown": st.column_config.NumberColumn("Average DD", format="percent"),
                },
          )
+
+   with diagnostics_tab:
+      x_metric = st.selectbox(
+         "Horizontal metric",
+         ["total_fees", "trade_count", "turnover", "max_drawdown", "idle_time"],
+         format_func=lambda value: value.replace("_", " ").title(),
+      )
+      y_metric = st.selectbox(
+         "Vertical metric",
+         ["pnl", "roi", "win_rate", "average_trade_profit", "fee_efficiency"],
+         format_func=lambda value: value.replace("_", " ").title(),
+      )
+      if x_metric == "trade_count":
+         scatter_data = frame[["market", x_metric, y_metric]].dropna()
+      else:
+         scatter_data = frame[["market", x_metric, y_metric, "trade_count"]].dropna()
+
+      if scatter_data.empty:
+         st.info("No finite values are available for this metric pair.")
+      else:
+         figure = px.scatter(
+               scatter_data,
+               x=x_metric,
+               y=y_metric,
+               hover_name="market",
+               size="trade_count",
+               title=f"{y_metric.replace('_', ' ').title()} vs {x_metric.replace('_', ' ').title()}",
+         )
+         st.plotly_chart(figure, width="stretch")
 
 
 def daily_summary_frame(aggregate: AggregateAnalyzer) -> pd.DataFrame:
@@ -735,6 +795,102 @@ def render_replay_image(analyzer: PerformanceAnalyzer, market_name: str) -> None
       st.image(str(output_path), caption=market_name, width="stretch")
    except Exception as exc:
       st.error(f"Replay graph failed: {type(exc).__name__}: {exc}")
+
+
+def gauge_chart(
+   title: str,
+   value: float,
+   minimum: float,
+   maximum: float,
+   color: str = "#2E75B6",
+   suffix: str = "",
+) -> go.Figure:
+   value = max(minimum, min(value, maximum))
+
+   figure = go.Figure(
+      go.Indicator(
+         mode="gauge+number",
+         value=value,
+         title={
+               "text": title,
+               "font": {"size": 20},
+         },
+         number={
+               "suffix": suffix,
+               "font": {"size": 26},
+         },
+         gauge={
+               "axis": {
+                  "range": [minimum, maximum],
+                  "tickwidth": 1,
+               },
+               "bar": {
+                  "color": color,
+                  "thickness": 0.7,
+               },
+               "bgcolor": "white",
+               "borderwidth": 0,
+               "steps": [
+                  {
+                     "range": [minimum, maximum],
+                     "color": "#E6E6E6",
+                  }
+               ],
+         },
+      )
+   )
+
+   figure.update_layout(
+      height=280,
+      margin=dict(l=25, r=25, t=55, b=10),
+   )
+
+   return figure
+
+def pie_chart(title: str, labels: list[str], values: list[float]) -> go.Figure:
+   figure = go.Figure(
+      go.Pie(
+         labels=labels,
+         values=values,
+         marker={"colors": ["#46783E", "#CF3D3D", "#3B3D66"]},
+         hole=0.55,
+         textinfo="label+percent",
+         hovertemplate=(
+               "%{label}<br>"
+               "Markets: %{value}<br>"
+               "Share: %{percent}"
+               "<extra></extra>"
+         ),
+      )
+   )
+
+   figure.update_layout(
+      title=title,
+      height=300,
+      showlegend=True,
+      margin=dict(l=20, r=20, t=60, b=20),
+   )
+
+   return figure
+
+
+def distribution_histogram(values, title) -> go.Figure:
+   figure = go.Figure(
+      go.Histogram(
+         x=values,
+         xbins=dict(start=-20,end=40,size=2),
+         marker=dict(color="#3B3D66")
+      )
+   )
+
+   figure.update_layout(
+      title=title,
+      height=300,
+      margin=dict(l=20, r=20, t=60, b=20),
+      bargap=0.05
+   )
+   return figure
+
 
 
 def main() -> None:
