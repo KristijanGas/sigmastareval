@@ -70,7 +70,6 @@ class live_provider(historical_provider):
 
                 if self.last_time_name is None or time_name != self.last_time_name:
                     self.last_time_name = time_name
-                    self.order_book = {}
                     self.price_to_beat = None
                     self.end_timestamp = None
                     self.metadata = None
@@ -80,7 +79,8 @@ class live_provider(historical_provider):
                     if self.order_book_feed_thread is not None and self.order_book_feed_thread.is_alive():
                         self.order_book_feed.stop()
                         self.order_book_feed_thread.join()
-                        print(f"Stopped order book feed for {self.market_slug_base} at {time_name}")
+                        print(f"Stopped order book feed for {self.market_slug_base}, {self.last_time_name}")
+                    self.order_book = {}
                     if not self.scraper_only:
                         self.set_market(time_name)
                     #self.binance_feed.consume()
@@ -129,10 +129,12 @@ class live_provider(historical_provider):
         self.consume_crypto_values()
         self.moving_mean_sum = 0.0
         self.moving_mean = None
+        self.metadata = None
         self.moving_mean_l = 0
         self.moving_mean_r = 0
         self.moving_mean_l_time = 0
         self.moving_mean_r_time = 0
+        self.order_book = {}
         while self.metadata is None:
             try:
                 self.metadata = self.get_metadata(time_name, self.market_slug_base)
@@ -152,7 +154,6 @@ class live_provider(historical_provider):
         if not self.scraper_only:
             for token_id in self.token_ids:
                 self.market.set_min_order_size(token_id, self.metadata[0]["markets"][0]["orderMinSize"])
-
         self.order_book_feed = OrderBookFeed([self.up_token_id, self.down_token_id], self.order_book)
 
         # start threads
