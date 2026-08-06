@@ -39,10 +39,11 @@ class KStrategy(masterbot):
         self.max_mean_down = None
         self.predictor = None
         self.last_logged_timestamp = None
+        self.predictor = polynomial_predictor()
 
         #parameters
         self.time_volatility_alpha = 1050
-        self.correction_treshold = 0.03
+        self.correction_treshold = 0.04
         self.max_slow_drawdown = 0.07
         self.correction_time_window = 10000
         self.investment_cash_percent = 0.2

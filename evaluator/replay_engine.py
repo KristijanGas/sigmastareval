@@ -8,6 +8,7 @@ from importlib import import_module
 from importlib.util import module_from_spec, spec_from_file_location
 import json
 import threading
+import zlib
 
 from utils.utils import sort_paths_chronologically
 
@@ -257,7 +258,7 @@ class replay_engine:
             with gzip.open(gz_file, "rt", encoding="utf-8") as f:
                 try:
                     data = json.load(f)
-                except json.JSONDecodeError as e:
+                except (json.JSONDecodeError, zlib.error) as e:
                     print(f"Error decoding JSON from {gz_file}: {e}")
                     continue
                 self.bot.past_crypto_predictions.clear()
@@ -269,6 +270,7 @@ class replay_engine:
                     analytics_path.write_text(json.dumps(analytics, indent=2, default=_json_default), encoding="utf-8")
                     print(f"Saved analytics to {analytics_path}, final cash: {analytics['final_cash']}")
                     #outcomes.append((round(analytics["final_cash"], 2), analytics_path))
+                data.clear()
                 f.close()
         #for outcome, analytics_path in outcomes:
         #    print(f"Final cash outcome: {outcome}, analytics saved at: {analytics_path}")
