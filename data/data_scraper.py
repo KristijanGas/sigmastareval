@@ -28,6 +28,30 @@ from data_provider.live_provider import live_provider
 #https://gamma-api.polymarket.com/markets?closed=false&limit=1000
 #https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT
 
+
+
+def get_current_market_names(time_name,market):
+    
+    #print(f"Fetching market metadata for {market} at {time_name}")
+    full_name = f"{market}-{time_name}"
+    path = f"https://gamma-api.polymarket.com/events?slug={full_name}"
+    #print(path)
+    request = urllib.request.Request(
+        path,
+        headers={
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "application/json, text/plain, */*",
+            "Referer": "https://polymarket.com/",
+        },
+    )
+    try: 
+        with urllib.request.urlopen(request, timeout=20) as url:
+            market_metadata = json.loads(url.read().decode())
+    except Exception as e:
+        print(f"Error fetching market metadata for {market} at {time_name}: {e}")
+        market_metadata = None
+    return market_metadata
+
 def get_clob_data(market_metadata, provider):
     clob_token_ids = json.loads(market_metadata[0]["markets"][0]["clobTokenIds"])
     clobs = []
@@ -48,7 +72,6 @@ def store_data(data, time_name, market):
     with gzip.open(store_path, "wt", encoding="utf-8") as f:
         json.dump(data, f)
     print(f"Stored data for {market} at {store_path}")
-    return
 
 
 def __main__():
@@ -63,18 +86,19 @@ def __main__():
         old_time_name = parse_time_name_hourly()["hourly_name"]
     elif market_type == "5m":
         old_time_name = parse_time_name_5m()
+    markets_metadata = get_current_market_names(old_time_name, market)
+    print(old_time_name)
+    data = {"metadata_start": markets_metadata, "all_clobs": [], "all_prices": [], "metadata_end": None}
+    ind = 0
+
     provider = live_provider(market, market_binance, market_type, None)
     provider_thread = threading.Thread(target=provider.run, daemon=True)
     provider_thread.start()
-    print("setting new market:", old_time_name)
-    provider.set_market(old_time_name)
-
-    markets_metadata = provider.metadata
-    print(old_time_name)
-    data_batch = {}
-    market_ind = 0
-    data_batch[market_ind] = {"metadata_start": markets_metadata, "all_clobs": [], "all_prices": [], "metadata_end": None}
-    ind = 0
+    if market_type == "hourly":
+        time_name = parse_time_name_hourly()["hourly_name"]
+    elif market_type == "5m":
+        time_name = parse_time_name_5m()
+    provider.set_market(time_name)
 
     while 1:
         if market_type == "hourly":
@@ -83,30 +107,28 @@ def __main__():
             time_name = parse_time_name_5m()
 
         if (time_name != old_time_name):
-            markets_metadata_old = provider.get_metadata(old_time_name, market)
-            data_batch[market_ind]["metadata_end"] = markets_metadata_old
-            data_batch[market_ind]["all_prices"] = provider.consume_crypto_values()
-            store_thread = threading.Thread(target=store_data, args=(data_batch[market_ind], old_time_name, market), daemon=True)
-            store_thread.start()
-
-            market_ind += 1
-            #new batch
-            print("setting new market:", time_name)
+            markets_metadata_old = get_current_market_names(old_time_name, market)
+            data["metadata_end"] = markets_metadata_old
+            data["all_prices"] = provider.consume_crypto_values()
+            store_data(data,old_time_name,market)
             provider.set_market(time_name)
-            markets_metadata = provider.metadata
-            data_batch[market_ind] = {"metadata_start": markets_metadata, "all_clobs": [], "all_prices": [], "metadata_end": None}
 
+            #new batch
+            markets_metadata = get_current_market_names(time_name, market)
+            data = {"metadata_start": markets_metadata, "all_clobs": [], "all_prices": [], "metadata_end": None}
+
+        #print(len(data[market]["all_clobs"]))
         old_time_name = time_name
 
-        market_metadata = data_batch[market_ind]["metadata_start"]
+        market_metadata = data["metadata_start"]
         try:
             clobs = get_clob_data(market_metadata, provider)
-            if len(data_batch[market_ind]["all_clobs"]) == 0 or data_batch[market_ind]["all_clobs"][-1] != clobs:
-                data_batch[market_ind]["all_clobs"].append(clobs)
-                ind += 1
+            if len(data["all_clobs"]) == 0 or data["all_clobs"][-1] != clobs:
+                data["all_clobs"].append(clobs)
         except Exception as e:
             print(f"Error occurred while fetching CLOB data for {market}: {e}")
         time.sleep(0.025)
+        ind += 1
         if ind % 100 == 0:
             print(time_name, market_binance)
 
