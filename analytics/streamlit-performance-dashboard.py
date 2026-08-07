@@ -3,6 +3,8 @@ import math
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
 import sys
+import time
+from matplotlib import pyplot as plt
 
 if __package__ is None or __package__ == "":
     repo_root = Path(__file__).resolve().parents[1]
@@ -21,7 +23,7 @@ from plotly.subplots import make_subplots
 import streamlit as st
 
 from analytics.aggregate_analyzer import AggregateAnalyzer
-from analytics.graph_drawer import draw_graph
+from analytics.streamlit_graphs import draw_replay_graph
 from analytics.performance_analyzer import PerformanceAnalyzer
 
 
@@ -45,9 +47,13 @@ def load_market_analyzer(path_string: str, initial_balance: float, modified_time
 ) -> tuple[PerformanceAnalyzer, Any]:
 
    del modified_time_ns
-   analyzer = PerformanceAnalyzer(initial_balance=initial_balance)
-   analyzer.analytics_path = Path(path_string)
-   result = analyzer.analyze()
+   path = Path(path_string)
+
+   with st.spinner(f"Analyzing {path.name}..."):
+      analyzer = PerformanceAnalyzer(initial_balance=initial_balance)
+      analyzer.analytics_path = Path(path_string)
+      result = analyzer.analyze()
+
    return analyzer, result
 
 
@@ -85,9 +91,12 @@ def load_all_markets(paths: list[Path], initial_balance: float
    records: list[dict[str, Any]] = []
    errors: list[dict[str, str]] = []
 
-   progress = st.progress(0, text="Analyzing markets...") if paths else None
+   progress = st.progress(0, text="Loading markets...") if paths else None
 
    for index, path in enumerate(paths, start=1):
+      # if progress is not None:
+      #    progress.progress((index - 1) / len(paths), text=f"Loading market {index}/{len(paths)}...") 
+
       try:
          analyzer, result = load_market_analyzer(
                str(path.resolve()),
@@ -102,7 +111,7 @@ def load_all_markets(paths: list[Path], initial_balance: float
          errors.append({"file": str(path), "error": f"{type(exc).__name__}: {exc}"})
 
       if progress is not None:
-         progress.progress(index / len(paths), text=f"Analyzed {index}/{len(paths)} markets")
+         progress.progress(index / len(paths), text=f"Loaded {index}/{len(paths)} markets")
 
    if progress is not None:
       progress.empty()
@@ -672,7 +681,7 @@ def render_single_market(
          #metric_card("False entry rate", record["false_entry_rate"], kind="percent")
 
    with replay_tab:
-      render_replay_image(analyzer, selected_market)
+      render_replay_graph(analyzer, selected_market)
 
    with equity_tab:
       equity = equity_frame(analyzer)
@@ -783,18 +792,24 @@ def equity_frame(analyzer: PerformanceAnalyzer) -> pd.DataFrame:
 
 
 
-def render_replay_image(analyzer: PerformanceAnalyzer, market_name: str) -> None:
-   path = Path(analyzer.analytics_path)
-   cache_key = hashlib.sha1(
-      f"{path.resolve()}:{path.stat().st_mtime_ns}".encode("utf-8")).hexdigest()[:16]
-   output_path = Path(".streamlit_cache") / f"replay_{cache_key}.png"
+def render_replay_graph(analyzer: PerformanceAnalyzer, market_name: str) -> None:
 
    try:
-      if not output_path.exists():
-         draw_graph(analyzer.data, output_path=output_path, show=False)
-      st.image(str(output_path), caption=market_name, width="stretch")
+      fig = draw_replay_graph(analyzer.data)
+      st.plotly_chart(
+         fig,
+         width="stretch",
+         config={
+               "scrollZoom": True,
+               "displayModeBar": True,
+               "displaylogo": False,
+         },
+      )
    except Exception as exc:
-      st.error(f"Replay graph failed: {type(exc).__name__}: {exc}")
+      st.error(
+         f"Replay graph failed: "
+         f"{type(exc).__name__}: {exc}"
+      )
 
 
 def gauge_chart(

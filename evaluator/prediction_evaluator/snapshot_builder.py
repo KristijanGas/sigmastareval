@@ -147,6 +147,10 @@ def parse_order_book(raw_book: dict[str, Any]):
     bids = raw_book.get("bids")
     asks = raw_book.get("asks")
 
+    # print("bids:")
+    # print(bids)
+    #exit()
+
     if not bids:
         best_bid_level = None
         best_bid = None
@@ -217,7 +221,11 @@ def create_snapshot(data_provider: historical_provider):
         time_to_end_ms = None
     else:
         time_to_end_ms = max(0, end_timestamp - timestamp)
-    up_book, down_book = prepare_order_book(data_provider.get_order_book())
+
+
+
+    #up_book, down_book = prepare_order_book(data_provider.get_order_book())
+    up_book, down_book = load_order_books(data_provider, timestamp)
     return MarketSnapshot(
         timestamp=timestamp,
         up_book=up_book,
@@ -228,3 +236,28 @@ def create_snapshot(data_provider: historical_provider):
         price_to_beat=data_provider.get_price_to_beat(),
         market_end_timestamp=end_timestamp,
     )
+
+def load_order_books(data_provider: historical_provider, timestamp):
+    up_asset_id = data_provider.get_up_token_id()
+    down_asset_id = data_provider.get_down_token_id()
+
+    raw_up_book = {}
+    raw_up_book["bids"] = data_provider.get_asset(up_asset_id, "bids")
+    raw_up_book["asks"] = data_provider.get_asset(up_asset_id, "asks")
+    raw_up_book["asset_id"] = up_asset_id
+    raw_up_book["timestamp"] = timestamp
+    up_book = parse_order_book(raw_up_book)
+
+    raw_down_book = {}
+    raw_down_book["bids"] = data_provider.get_asset(down_asset_id, "bids")
+    raw_down_book["asks"] = data_provider.get_asset(down_asset_id, "asks")
+    raw_down_book["asset_id"] = down_asset_id
+    raw_down_book["timestamp"] = timestamp
+    down_book = parse_order_book(raw_down_book)
+
+    return up_book, down_book
+
+
+
+
+
