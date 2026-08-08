@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
-from sklearn.ensemble import HistGradientBoostingRegressor
+from sklearn.ensemble import HistGradientBoostingRegressor, HistGradientBoostingClassifier
 from evaluator.prediction_evaluator.feature_extractor import ExtractedMarketState, MarketFeatureExtractor
 from evaluator.prediction_evaluator.prediction_eval_dataclasses import MarketSnapshot, NumericPrediction
 import joblib
@@ -22,14 +22,15 @@ class GradientBoostingPredictor:
       price_to_beat: float = None
    ):
       self.name="gradient_boosting_predictor"
-      if horizon_ms <= 0:
+      if target_name != "outcome_probability" and horizon_ms <= 0:
          raise ValueError("horizon_ms must be positive.")
       self.horizon_ms = horizon_ms
-
+      self.target_name = target_name
       self.SUPPORTED_TARGETS = {
         "midpoint_change",
         "crypto_change",
         "normalized_crypto_trend",
+        "outcome_probability",
       }
 
       if target_name not in self.SUPPORTED_TARGETS:
@@ -48,7 +49,7 @@ class GradientBoostingPredictor:
          raise TypeError("model must provide a predict(X) method.")
 
       self.model = model
-      self.target_name = target_name
+      
       self.feature_extractor = feature_extractor
       self.clip_predictions = clip_predictions
       self.crypto_price_stdev = {"bitcoin-up-or-down": 300, "ethereum-up-or-down": 10.4, "solana-up-or-down": 0.6, "xrp-up-or-down": 0.0068,
@@ -71,18 +72,33 @@ class GradientBoostingPredictor:
       #    l2_regularization=0.1,
       #    random_state=42,
       # )
-      model = HistGradientBoostingRegressor(
-         learning_rate=0.03,
-         max_iter=1000,
-         max_leaf_nodes=3,
-         min_samples_leaf=100,
-         l2_regularization=1.0,
-         early_stopping=True,
-         validation_fraction=0.15,
-         n_iter_no_change=30,
-         tol=1e-6,
-         random_state=42,
-      )
+      if self.target_name == "outcome_probability":
+         print("using a classifier model")
+         model = HistGradientBoostingClassifier(
+            learning_rate=0.03,
+            max_iter=1000,
+            max_leaf_nodes=3,
+            min_samples_leaf=100,
+            l2_regularization=1.0,
+            early_stopping=True,
+            validation_fraction=0.15,
+            n_iter_no_change=30,
+            tol=1e-6,
+            random_state=42,
+         )
+      else:
+         model = HistGradientBoostingRegressor(
+            learning_rate=0.03,
+            max_iter=1000,
+            max_leaf_nodes=3,
+            min_samples_leaf=100,
+            l2_regularization=1.0,
+            early_stopping=True,
+            validation_fraction=0.15,
+            n_iter_no_change=30,
+            tol=1e-6,
+            random_state=42,
+         )
       X_train, y_train = training_samples
       model.fit(X_train, y_train)
       print("Training complete")
@@ -114,7 +130,11 @@ class GradientBoostingPredictor:
          return None
 
       feature_row = extracted.features.select_row(self.feature_names)
-      prediction = float(self.model.predict(feature_row)[0])
+      if self.target_name == "outcome_probability":
+         prediction = self.model.predict_proba(feature_row)[0,1]
+      else:
+         prediction = float(self.model.predict(feature_row)[0])
+
 
       if self.target_name == "midpoint_change":
          return self.create_midpoint_prediction(
@@ -134,6 +154,14 @@ class GradientBoostingPredictor:
                predicted_crypto_change=prediction,
          )
 
+      if self.target_name == "outcome_probability":
+         return self.create_outcome_probability_prediction(
+            extracted=extracted,
+            predicted_probability=prediction,
+         )
+
+
+
    def predict(self, snapshot: MarketSnapshot):
       if self.model is None:
          return 0
@@ -146,6 +174,8 @@ class GradientBoostingPredictor:
             predicted_trend = prediction.predicted_value
             #print(predicted_trend)
       return predicted_trend
+
+
 
    def update_and_predict(self, snapshot: MarketSnapshot):
       extracted = self.feature_extractor.update_and_extract(snapshot)
@@ -161,7 +191,13 @@ class GradientBoostingPredictor:
          return None
 
       feature_row = extracted.features.select_row(self.feature_names)
-      prediction = float(self.model.predict(feature_row)[0])
+
+      if self.target_name == "outcome_probability":
+         prediction = self.model.predict_proba(feature_row)[0,1]
+      else:
+         prediction = float(self.model.predict(feature_row)[0])
+
+
 
       if self.target_name == "midpoint_change":
          return self.create_midpoint_prediction(
@@ -179,6 +215,12 @@ class GradientBoostingPredictor:
          return self.create_normalized_trend_prediction(
                extracted=extracted,
                predicted_crypto_change=prediction,
+         )
+
+      if self.target_name == "outcome_probability":
+         return self.create_outcome_probability_prediction(
+            extracted=extracted,
+            predicted_probability=prediction,
          )
    
 
@@ -223,6 +265,15 @@ class GradientBoostingPredictor:
          horizon_ms=self.horizon_ms,
          predicted_value=predicted_midpoint,
          current_value=extracted.current_midpoint,
+         target=self.target_name,
+      )
+
+   def create_outcome_probability_prediction(self, extracted: ExtractedMarketState, predicted_probability: float):
+      return NumericPrediction(
+         prediction_timestamp=extracted.timestamp,
+         horizon_ms=self.horizon_ms,
+         predicted_value=predicted_probability,
+         current_value=None,
          target=self.target_name,
       )
    

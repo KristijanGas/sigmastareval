@@ -8,6 +8,8 @@ import sys
 import gzip
 import time
 import joblib
+import ast
+import math
 
 
 
@@ -31,7 +33,7 @@ from evaluator.utils.utils import extract_timestamp, sort_paths_chronologically
 from evaluator.prediction_evaluator.future_target_matcher import FutureTargetMatcher
 from evaluator.prediction_evaluator.snapshot_builder import SnapshotBuilder
 
-from evaluator.prediction_evaluator.prediction_eval_dataclasses import MarketSnapshot, PredictionObservation, MarketAssets
+from evaluator.prediction_evaluator.prediction_eval_dataclasses import MarketMetadata, MarketSnapshot, PredictionObservation, MarketAssets
 
 # bot.prediction_models.linear_predictor import LinearPredictor
 #from bot.prediction_models.multi_window_linear_predictor import MultiWindowLinearPredictor
@@ -39,18 +41,20 @@ from evaluator.prediction_evaluator.prediction_eval_dataclasses import MarketSna
 #from bot.prediction_models.multi_window_regression_predictor import MultiWindowRegressionPredictor
 from bot.prediction_models.gradient_boosting_predictor import GradientBoostingPredictor
 from evaluator.prediction_evaluator.feature_extractor import MarketFeatureExtractor
-from evaluator.prediction_evaluator.training_targets import CRYPTO_CHANGE_TARGET, PendingTrainingRow, TrainingTarget
+from evaluator.prediction_evaluator.training_targets import CRYPTO_CHANGE_TARGET, OUTCOME_PROBABILITY_TARGET, PendingTrainingRow, TrainingTarget
 
 class PredictionEvaluator:
     def __init__(self, predictor, target_matcher: FutureTargetMatcher):
         self.predictor = predictor
         self.target_matcher = target_matcher
 
-    def evaluate_market(self, snapshots: list[MarketSnapshot]):
+    def evaluate_market(self, snapshots: list[MarketSnapshot], observation_interval_ms=0):
         self.predictor.reset()
         self.target_matcher.reset()
 
         observations: list[PredictionObservation] = []
+
+        last_training_sample_timestamp = None
 
         for snapshot in snapshots:
             resolved = self.target_matcher.process_snapshot(snapshot)
@@ -58,8 +62,17 @@ class PredictionEvaluator:
             observations.extend(resolved)
 
             prediction = self.predictor.update_and_predict(snapshot) #creates a new prediction using only data available up to this snapshot
+
+            if (observation_interval_ms is not None
+                and last_training_sample_timestamp is not None
+                and snapshot.timestamp - last_training_sample_timestamp
+                < observation_interval_ms):
+                continue
+
             if prediction is not None:
                 self.target_matcher.add_prediction(prediction)
+
+            last_training_sample_timestamp = snapshot.timestamp
 
         return observations
 
@@ -84,6 +97,44 @@ def extract_price_to_beat(metadata_end: list[dict[str, Any]]):
         return None
     
     return float(value)
+
+def extract_final_price(metadata_end: list[dict[str,Any]]):
+    if not metadata_end:
+        return None
+    event = metadata_end[0]
+    event_metadata = event.get("eventMetadata")
+    if not isinstance(event_metadata, dict):
+        return None
+    value = event_metadata.get("finalPrice")
+    if value is None:
+        return None
+    
+    #print(value)
+    return float(value)
+
+def get_resolved_outcome(metadata_end):
+    price_to_beat = extract_price_to_beat(metadata_end)
+    final_price = extract_final_price(metadata_end)
+
+    if price_to_beat is None or final_price is None:
+        event = metadata_end[0]
+        markets = event.get("markets")
+        market = markets[0]
+        outcome_prices_string = market.get("outcomePrices")    
+        outcome_prices = ast.literal_eval(outcome_prices_string)
+        if outcome_prices:  # outcomePrices is sometimes ["0.001", "0.999"], but finalPrice missing
+            #print(outcome_prices)
+            #print(outcome_prices[0])
+            up_price = float(outcome_prices[0])
+            if up_price < 0.005:
+                return "DOWN"
+            elif up_price > 0.995:
+                return "UP"
+        return None
+    if final_price >= price_to_beat:
+        return "UP"
+    else:
+        return "DOWN"
 
 
 def parse_json_list(value):
@@ -140,6 +191,19 @@ def mae(observations: list[PredictionObservation]):
 
     return(sum(errors) / len(observations))
 
+# mathematically same as MSE
+def brier_score(observations: list[PredictionObservation]):
+    if not observations:
+        return None
+    
+    errors = []
+    for observation in observations:
+        if observation.actual_value is None or observation.predicted_value is None:
+            continue
+        errors.append(math.pow((observation.actual_value - observation.predicted_value),2))
+
+    return(sum(errors) / len(observations))
+
 
 import matplotlib.pyplot as plt
 
@@ -167,7 +231,8 @@ def plot_prediction_observations(observations):
     ]
 
     actual = [
-        observation.actual_value
+        #observation.actual_value
+        observation.current_midpoint
         for observation in observations
     ]
 
@@ -276,6 +341,7 @@ def create_training_samples(
     target: TrainingTarget,
     max_target_delay_ms: int | None = None,
     sample_interval_ms: int | None = 5000,  #minimum space between two training samples
+    market_metadata: MarketMetadata | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     feature_names = tuple(feature_names)
     feature_extractor.reset()
@@ -303,27 +369,23 @@ def create_training_samples(
             pending.popleft()
 
             target_delay_ms = snapshot.timestamp - requested_target_timestamp
-
             if (max_target_delay_ms is not None
                 and target_delay_ms > max_target_delay_ms):
                 continue
 
-            actual_target = target.create_target(oldest.target_context, snapshot)
-
+            actual_target = target.create_target(oldest.target_context, snapshot, market_metadata)
             if actual_target is None:
                 continue
+           #print(actual_target)
 
             if not np.isfinite(actual_target):
                 continue
 
-            #actual value
-            #future_change = current_crypto_price - oldest.current_value
             
             X_rows.append(oldest.feature_values)
             y_values.append(float(actual_target))
 
         extracted = feature_extractor.update_and_extract(snapshot)
-
         if extracted is None:
             continue
 
@@ -339,12 +401,10 @@ def create_training_samples(
             continue
 
         target_context = target.create_context(extracted, snapshot)
-
         if target_context is None:
             continue
 
         feature_values = extracted.features.select_values(feature_names)
-
         pending.append(
             PendingTrainingRow(
                 prediction_timestamp=extracted.timestamp,
@@ -369,71 +429,71 @@ def create_training_samples(
 
 
 
-def create_training_dataset(
-    markets: Sequence[Sequence[MarketSnapshot]],
-    feature_extractor,
-    feature_names: Sequence[str],
-    horizon_ms: int,
-    target: TrainingTarget,
-    max_target_delay_ms: int | None = None,
-) -> tuple[np.ndarray, np.ndarray]:
-    X_parts: list[np.ndarray] = []
-    y_parts: list[np.ndarray] = []
+# def create_training_dataset(
+#     markets: Sequence[Sequence[MarketSnapshot]],
+#     feature_extractor,
+#     feature_names: Sequence[str],
+#     horizon_ms: int,
+#     target: TrainingTarget,
+#     max_target_delay_ms: int | None = None,
+# ) -> tuple[np.ndarray, np.ndarray]:
+#     X_parts: list[np.ndarray] = []
+#     y_parts: list[np.ndarray] = []
 
-    for snapshots in markets:
-        extractor = feature_extractor
+#     for snapshots in markets:
+#         extractor = feature_extractor
 
-        # X_market, y_market = create_training_samples(
-        #     snapshots=snapshots,
-        #     feature_extractor=extractor,
-        #     feature_names=feature_names,
-        #     horizon_ms=horizon_ms,
-        #     max_target_delay_ms=max_target_delay_ms
-        # )
+#         # X_market, y_market = create_training_samples(
+#         #     snapshots=snapshots,
+#         #     feature_extractor=extractor,
+#         #     feature_names=feature_names,
+#         #     horizon_ms=horizon_ms,
+#         #     max_target_delay_ms=max_target_delay_ms
+#         # )
 
-        X_market, y_market = create_training_samples(
-            snapshots=snapshots,
-            feature_extractor=extractor,
-            feature_names=feature_names,
-            horizon_ms=horizon_ms,
-            max_target_delay_ms=max_target_delay_ms,
-            target=target
-        )
+#         X_market, y_market = create_training_samples(
+#             snapshots=snapshots,
+#             feature_extractor=extractor,
+#             feature_names=feature_names,
+#             horizon_ms=horizon_ms,
+#             max_target_delay_ms=max_target_delay_ms,
+#             target=target
+#         )
 
-        if len(X_market) == 0:
-            continue
+#         if len(X_market) == 0:
+#             continue
             
-        X_parts.append(X_market)
-        y_parts.append(y_market)
-        print("samples ready")
+#         X_parts.append(X_market)
+#         y_parts.append(y_market)
+#         print("samples ready")
 
-    if not X_parts:
-        raise ValueError("No valid training samples were created.")
+#     if not X_parts:
+#         raise ValueError("No valid training samples were created.")
 
-    return (np.concatenate(X_parts, axis=0), np.concatenate(y_parts, axis=0))
+#     return (np.concatenate(X_parts, axis=0), np.concatenate(y_parts, axis=0))
 
-def generate_test_and_train_data(dataset_paths):
-    train_snapshots = []
-    test_paths = []
-    length = 0.0
-    for dataset in dataset_paths:
-        for data_file in Path(dataset).glob("*.gz"):
-            length += 1
+# def generate_test_and_train_data(dataset_paths):
+#     train_snapshots = []
+#     test_paths = []
+#     length = 0.0
+#     for dataset in dataset_paths:
+#         for data_file in Path(dataset).glob("*.gz"):
+#             length += 1
     
-    count = 0.0
-    for dataset in dataset_paths:
-        for data_file in Path(dataset).glob("*.gz"):
-            if count/length >= 0.2:
-                test_paths.append(data_file)
-                count += 1
-            else:
-                file = data_file.resolve()
-                with gzip.open(file, "rt", encoding="utf-8") as f:
-                    data = json.load(f)
-                    market_snapshots = prepare_market_snapshots(data)
-                    train_snapshots.append(market_snapshots)
-                    count += 1
-    return test_paths, train_snapshots
+#     count = 0.0
+#     for dataset in dataset_paths:
+#         for data_file in Path(dataset).glob("*.gz"):
+#             if count/length >= 0.2:
+#                 test_paths.append(data_file)
+#                 count += 1
+#             else:
+#                 file = data_file.resolve()
+#                 with gzip.open(file, "rt", encoding="utf-8") as f:
+#                     data = json.load(f)
+#                     market_snapshots = prepare_market_snapshots(data)
+#                     train_snapshots.append(market_snapshots)
+#                     count += 1
+#     return test_paths, train_snapshots
 
 
 # creates snapshots and training samples for one market at a time
@@ -466,6 +526,10 @@ def prepare_training_data(
             continue
 
         market_snapshots = prepare_market_snapshots(data)
+
+        metadata_start = data["metadata_start"]
+        metadata_end = data["metadata_end"]
+        metadata = extract_market_metadata(metadata_start=metadata_start, metadata_end=metadata_end)
         del data
 
         X_market, y_market = create_training_samples(
@@ -476,6 +540,7 @@ def prepare_training_data(
             max_target_delay_ms=max_target_delay_ms,
             target=target,
             sample_interval_ms=sample_interval_ms,
+            market_metadata=metadata,
         )
 
         del market_snapshots
@@ -502,6 +567,37 @@ def prepare_training_data(
     y_train = np.concatenate(y_markets, axis=0)
 
     return X_train, y_train
+
+
+def extract_market_metadata(
+        metadata_start: list[dict[str, Any]],
+        metadata_end: list[dict[str, Any]],
+        ) -> MarketMetadata:
+    if not metadata_start:
+        print("metadata_start is empty")
+        return None
+    if not metadata_end:
+        print("metadata_end is empty")
+        return None
+    event = metadata_start[0]
+    
+    assets = extract_market_assets(metadata_start)
+    price_to_beat = extract_price_to_beat(metadata_end)
+    final_price = extract_final_price(metadata_end)
+    resolved_outcome = get_resolved_outcome(metadata_end)
+
+    #markets = event.get("markets")
+    #market = markets[0]
+    #event_start = market.get("eventStartTime")
+    #end_date = market.get("endDate")
+
+    return MarketMetadata(
+        up_asset_id=assets.up_asset_id,
+        down_asset_id=assets.down_asset_id,
+        final_price=final_price,
+        price_to_beat=price_to_beat,
+        resolved_outcome=resolved_outcome,
+    )
 
 def get_test_paths(dataset_paths):
     test_paths = []
@@ -556,83 +652,102 @@ def prepare_train_snapshots(train_paths):
 
     return train_snapshots
 
-def start_evaluation(predictor, test_paths):
+def start_evaluation(predictor, test_paths, max_target_delay_ms, observation_interval_ms=0):
     for data_file in test_paths:
         print(f"Found data file: {data_file}")
         file = data_file.resolve()
         with gzip.open(file, "rt", encoding="utf-8") as f:
             data = json.load(f)
 
-            target_matcher = FutureTargetMatcher()
+            metadata_start = data["metadata_start"]
+            metadata_end = data["metadata_end"]
+            #print(metadata_end)
+            metadata = extract_market_metadata(metadata_start=metadata_start, metadata_end=metadata_end)
+            #print(metadata)
+
+            target_matcher = FutureTargetMatcher(market_metadata=metadata, max_target_delay_ms=max_target_delay_ms)
             evaluator = PredictionEvaluator(
                 predictor=predictor,
                 target_matcher=target_matcher
             )
             market_snapshots = prepare_market_snapshots(data)
 
-            observations = evaluator.evaluate_market(market_snapshots)
+            del data
+
+            observations = evaluator.evaluate_market(market_snapshots, observation_interval_ms=observation_interval_ms)
 
             print("Observations:", len(observations))
             print("MAE:", mae(observations))
+            print("MSE (Brier Score):", brier_score(observations))
 
-            for i in range(5):
-                observation = observations[i]
-                print(
-                    f"Prediction at {observation.prediction_timestamp}: "
-                    #f"current={observation.current_value:.4f}, "
-                    f"predicted={observation.predicted_value:.4f}, "
-                    f"actual={observation.actual_value:.4f}, "
-                    f"actual timestamp={observation.actual_timestamp}, "
-                )
-    plot_prediction_observations(observations)
+            # try:
+            #     for i in range(5):
+            #         observation = observations[i]
+            #         print(
+            #             f"Prediction at {observation.prediction_timestamp}: "
+            #             #f"current={observation.current_value:.4f}, "
+            #             f"predicted={observation.predicted_value:.4f}, "
+            #             f"actual={observation.actual_value:.4f}, "
+            #             f"actual timestamp={observation.actual_timestamp}, "
+            #         )
+            # except IndexError:
+            #     print("No observations in this market. There was a problem with something.")
+
+            plot_prediction_observations(observations)
     plot_prediction_accuracy(observations)
 
 
 def main():
     print("start")
-    # GRADIENT_BOOSTING_FEATURES = (
-    #     "current_midpoint",
-
-    #     "midpoint_momentum_3000",
-    #     "midpoint_momentum_8000",
-    #     "midpoint_momentum_18000",
-
-    #     "spread",
-
-    #     "imbalance_top_1",
-    #     "imbalance_top_3",
-    #     "imbalance_top_5",
-
-    #     "bid_volume_top_5",
-    #     "ask_volume_top_5",
-
-    #     "binance_return_3000",
-    #     "binance_return_10000",
-    #     "binance_return_30000",
-
-    #     "relative_distance_to_price_to_beat",
-    #     "seconds_remaining",
-    # )
-
     GRADIENT_BOOSTING_FEATURES = (
-        "binance_return_1000",
-        "binance_return_3000",
-        #"binance_range_position_5000",
-        #"binance_range_position_15000",
-        #"binance_range_position_30000",
-        #"binance_return_volatility_10000",
-        #"binance_return_volatility_20000",
-        #"binance_relative_high_distance_5000",
-        #"binance_relative_low_distance_5000",
-        #"binance_range_position_7000"
-        #"binance_return_3500",
-        #"binance_acceleration_1s_5s",
-    )  
+        "current_midpoint",
+        #"binance_range_position_30000"
+
+        #"midpoint_momentum_3000",
+        #"midpoint_momentum_10000",
+        #"midpoint_momentum_30000",
+
+        #"spread",
+
+        #"imbalance_top_1",
+        #"imbalance_top_3",
+        #"imbalance_top_5",
+
+        "bid_volume_top_5",
+        "ask_volume_top_5",
+
+        #"binance_return_3000",
+        #"binance_return_10000",
+        #"binance_return_30000",
+        "binance_return_volatility_15000",
+
+        #"relative_distance_to_price_to_beat",
+        #"seconds_remaining",
+    )
+
+    # GRADIENT_BOOSTING_FEATURES = (
+    #     "binance_return_1000",
+    #     "binance_return_3000",
+    #     #"binance_range_position_5000",
+    #     #"binance_range_position_15000",
+    #     #"binance_range_position_30000",
+    #     #"binance_return_volatility_10000",
+    #     #"binance_return_volatility_20000",
+    #     #"binance_relative_high_distance_5000",
+    #     #"binance_relative_low_distance_5000",
+    #     #"binance_range_position_7000"
+    #     #"binance_return_3500",
+    #     #"binance_acceleration_1s_5s",
+    # )  
 
     predictor_path = sys.argv[1]
     dataset_paths = sys.argv[2:]
 
     training_required = True
+    horizon_ms = 0
+    target = OUTCOME_PROBABILITY_TARGET
+    max_target_delay_ms = None #1000 normally, None for outcome_probability
+    observation_interval_ms=5000 #min distance between two evaluated observations (used in testing/evaluation)
 
     if training_required:
         #test_paths, train_snapshots = generate_test_and_train_data(dataset_paths)
@@ -649,13 +764,13 @@ def main():
         #training_samples = None
         training_samples = prepare_training_data(
             train_paths=train_paths,
-            feature_extractor=MarketFeatureExtractor(binance_lookbacks_ms=(1000,3000,5000),
+            feature_extractor=MarketFeatureExtractor(binance_lookbacks_ms=(1000,10000,30000),
                                                      crypto_range_windows_ms=(5000,15000, 30000)),
             #feature_extractor=MarketFeatureExtractor(),
             feature_names=GRADIENT_BOOSTING_FEATURES,
-            target=CRYPTO_CHANGE_TARGET,
-            horizon_ms=3000,
-            max_target_delay_ms=1000,
+            target=target,
+            horizon_ms=horizon_ms,
+            max_target_delay_ms=max_target_delay_ms,
         )
 
         # training_samples = create_training_dataset(
@@ -671,18 +786,18 @@ def main():
         #model = joblib.load("bot/trained_models/trend_model_btc.joblib")
         predictor = GradientBoostingPredictor(
             model=None,
-            feature_extractor=MarketFeatureExtractor(binance_lookbacks_ms=(1000,3000,5000),
+            feature_extractor=MarketFeatureExtractor(binance_lookbacks_ms=(1000,10000,30000),
                                                      crypto_range_windows_ms=(5000,15000,30000)),
             #feature_extractor=MarketFeatureExtractor(),
-            horizon_ms=3000,
-            #target_name="midpoint_change",
-            target_name="normalized_crypto_trend",
+            horizon_ms=horizon_ms,
+            #target_name="normalized_crypto_trend",
+            target_name=target.name,
             gradient_boosting_features=GRADIENT_BOOSTING_FEATURES,
             training_samples=training_samples,
             market_name="bitcoin-up-or-down",
         )
         #joblib.dump(predictor.model, "bot/trained_models/model_name.joblib")
-        start_evaluation(predictor, test_paths=test_paths)
+        start_evaluation(predictor, test_paths=test_paths, max_target_delay_ms=max_target_delay_ms, observation_interval_ms=observation_interval_ms)
     else:
         test_paths=get_test_paths(dataset_paths=dataset_paths)
         start_evaluation(predictor=None, test_paths=test_paths)

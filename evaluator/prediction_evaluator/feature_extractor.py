@@ -45,11 +45,11 @@ class ExtractedMarketState:
 class MarketFeatureExtractor:
    def __init__(
       self,
-      midpoint_lookbacks_ms: Sequence[int] = (3000, 8000, 18000),
+      midpoint_lookbacks_ms: Sequence[int] = (3000, 10000, 30000),
       binance_lookbacks_ms: Sequence[int] = (3000, 10000, 30000),
       imbalance_levels: Sequence[int] = (1,3,5),
       crypto_range_windows_ms: Sequence[int] = (10000, 30000),
-      binance_volatility_windows_ms=(10000, 20000),
+      binance_volatility_windows_ms=(10000, 15000),
 
       max_lookup_delay_ms = 5000):
          self.midpoint_lookbacks_ms = self._validate_windows(
@@ -329,7 +329,7 @@ class MarketFeatureExtractor:
                ) / prices[index - 1]
                for index in range(1, len(prices))
          ]
-
+         #print(len(absolute_changes))
          if len(absolute_changes) >= 2:
                values[
                   f"binance_change_volatility_{window_ms}"
