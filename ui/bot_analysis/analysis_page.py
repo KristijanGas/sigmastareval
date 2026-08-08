@@ -318,8 +318,8 @@ def render_aggregate(frame: pd.DataFrame, results: dict[str, Any], initial_balan
     #       config={"displayModeBar": False})
         
 
-    third_row = st.columns(2)
-    with third_row[0]:
+    first, second, third = st.columns([3,4,4])
+    with first:
         profitable = int((frame["pnl"] > 0).sum())
         losing = int((frame["pnl"] < 0).sum())
         even = int((frame["pnl"] == 0).sum())
@@ -331,8 +331,15 @@ def render_aggregate(frame: pd.DataFrame, results: dict[str, Any], initial_balan
             )
         )
 
-    with third_row[1]:
+    with second:
         st.plotly_chart(distribution_histogram(values=frame["roi"]*100, title="ROI Distribution"))
+
+    with third:
+        matrix = aggregate.profit_vs_resolution_matrix()
+        st.plotly_chart(matrix_heatmap(
+            title="Profit vs Resolution Heatmap",
+            labels=[["Up", "Down"], ["Profitable", "Not-profitable"]],
+            data=matrix))
         
         
     overview_tab, markets_tab, daily_tab, diagnostics_tab= st.tabs(
@@ -865,6 +872,33 @@ def gauge_chart(
 
     return figure
 
+def matrix_heatmap(title: str, labels, data: list[list[int]]):
+    x = labels[0]
+    y = labels[1]
+    figure = go.Figure(
+        data=go.Heatmap(
+            z=data,
+            x=x,
+            y=y,
+            colorscale="Blues",
+            text=data,
+            texttemplate="%{text}",
+            textfont={"size": 20},
+        )
+    )
+
+    figure.update_layout(
+        title=title,
+        xaxis_title="Resolution",
+        yaxis_title="Profitable/Not-profitable",
+        height=400,
+        margin=dict(l=20, r=20, t=60, b=20),
+    )
+
+
+
+    return figure
+
 def pie_chart(title: str, labels: list[str], values: list[float]) -> go.Figure:
     figure = go.Figure(
         go.Pie(
@@ -884,7 +918,7 @@ def pie_chart(title: str, labels: list[str], values: list[float]) -> go.Figure:
 
     figure.update_layout(
         title=title,
-        height=300,
+        height=400,
         showlegend=True,
         margin=dict(l=20, r=20, t=60, b=20),
     )
@@ -896,14 +930,14 @@ def distribution_histogram(values, title) -> go.Figure:
     figure = go.Figure(
         go.Histogram(
             x=values,
-            xbins=dict(start=-20,end=40,size=2),
+            xbins=dict(size=2),
             marker=dict(color="#3B3D66")
         )
     )
 
     figure.update_layout(
         title=title,
-        height=300,
+        height=400,
         margin=dict(l=20, r=20, t=60, b=20),
         bargap=0.05
     )

@@ -24,4 +24,5 @@ class PerformanceResult:
     fee_efficiency: float
     turnover: float
     total_traded_volume: float
+    resolution: str
     #adding more later

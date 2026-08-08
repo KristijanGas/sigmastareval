@@ -255,6 +255,28 @@ class AggregateAnalyzer:
     
     def markets_tested(self):
         return len(self.results)
+
+    # (profitable, not-profitable) x (up won, down won)
+    def profit_vs_resolution_matrix(self):
+        matrix = []
+        first_row = [0,0]
+        second_row = [0,0]
+        for r in self.results:
+            if r.pnl > 0 and r.resolution == "Up":
+                first_row[0] += 1
+            elif r.pnl > 0 and r.resolution == "Down":
+                first_row[1] += 1
+            elif r.pnl <= 0 and r.resolution == "Up":
+                second_row[0] += 1
+            elif r.pnl <= 0 and r.resolution == "Down":
+                second_row[1] += 1
+
+        matrix.append(first_row)
+        matrix.append(second_row)
+
+        return matrix
+
+
     
     def get_daily_summaries(self):
         daily_results: dict[date, list] = {}

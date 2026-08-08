@@ -52,6 +52,7 @@ class PerformanceAnalyzer:
         self.performance_result.fee_efficiency = self.fee_efficiency()
         self.performance_result.turnover = self.turnover()
         self.performance_result.total_traded_volume = self.total_traded_volume()
+        self.performance_result.resolution = self.data["resolution"]
         #print("from analyzer (name):")
         #print(self.performance_result.market_name)
 
