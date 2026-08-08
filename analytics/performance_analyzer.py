@@ -1,3 +1,4 @@
+import gzip
 import json
 from analytics.equity_point import EquityPoint
 from analytics.performance_result import PerformanceResult
@@ -20,8 +21,14 @@ class PerformanceAnalyzer:
 
     def analyze(self):
         self.performance_result = PerformanceResult()
-        with open(self.analytics_path, "r", encoding="utf-8") as f:
-            self.data = json.load(f)
+        if str(self.analytics_path).endswith(".gz"):
+            with gzip.open(self.analytics_path, "rt", encoding="utf-8") as f:
+                self.data = json.load(f)
+                #print("used gzip.open")
+        else:
+            with open(self.analytics_path, "r", encoding="utf-8") as f:
+                #print("used normal open")
+                self.data = json.load(f)
         self.generate_equity_curve()
         self.build_closed_trades_fifo(self.data["transactions"], self.data["resolution"], include_fees=True)
         #self.plot_trade_pnl_bars()
@@ -32,7 +39,7 @@ class PerformanceAnalyzer:
         self.performance_result.profit_factor = self.profit_factor()
         self.performance_result.trade_count = self.trade_count()
         self.performance_result.final_cash = self.data["final_cash"]
-        self.performance_result.total_fees_paid = self.total_fees_paid()  # multiply by x to scale on graph
+        self.performance_result.total_fees_paid = self.total_fees_paid()
         self.performance_result.market_name = self.analytics_path.name
         self.performance_result.winrate = self.winrate()
         self.performance_result.avg_trade_profit = self.average_trade_profit()
@@ -45,6 +52,8 @@ class PerformanceAnalyzer:
         self.performance_result.fee_efficiency = self.fee_efficiency()
         self.performance_result.turnover = self.turnover()
         self.performance_result.total_traded_volume = self.total_traded_volume()
+        #print("from analyzer (name):")
+        #print(self.performance_result.market_name)
 
 
         #self.run_decision_quality_methods()
@@ -56,7 +65,17 @@ class PerformanceAnalyzer:
     
     def generate_equity_curve(self):
 
-        timestamps = sorted(self.data["timestamps"])
+
+        if "timestamps" not in self.data:
+            timestamps_list = [item["timestamp"] for item in self.data["cash_history"]]
+
+            # for item_list in self.data["mid_prices"].values():
+            #     timestamps_list += [item["timestamp"] for item in item_list]
+
+            timestamps = sorted(list(set(timestamps_list)))
+            self.data["timestamps"] = timestamps
+        else:
+            timestamps = sorted(self.data["timestamps"])
 
         cash_lookup = {
             item["timestamp"]: item["cash"]
