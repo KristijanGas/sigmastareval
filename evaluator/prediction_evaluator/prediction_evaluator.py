@@ -39,6 +39,7 @@ from evaluator.prediction_evaluator.prediction_eval_dataclasses import MarketSna
 #from bot.prediction_models.multi_window_regression_predictor import MultiWindowRegressionPredictor
 from bot.prediction_models.gradient_boosting_predictor import GradientBoostingPredictor
 from evaluator.prediction_evaluator.feature_extractor import MarketFeatureExtractor
+from evaluator.prediction_evaluator.training_targets import CRYPTO_CHANGE_TARGET, PendingTrainingRow, TrainingTarget
 
 class PredictionEvaluator:
     def __init__(self, predictor, target_matcher: FutureTargetMatcher):
@@ -258,19 +259,23 @@ def prepare_market_snapshots(data):
 
     return builder.build(raw_clobs=all_clobs, raw_prices=all_prices)
 
-@dataclass
-class PendingTrainingRow:
-    prediction_timestamp: int
-    current_value: float
-    feature_values: tuple[float, ...]
+# @dataclass
+# class PendingTrainingRow:
+#     prediction_timestamp: int
+#     current_value: float
+#     feature_values: tuple[float, ...]
 
-def create_training_samples_trend(
+
+
+# Generic function for creating training samples for any numerical target
+def create_training_samples(
     snapshots: Sequence[MarketSnapshot],
     feature_extractor: MarketFeatureExtractor,
     feature_names: Sequence[str],
     horizon_ms: int,
+    target: TrainingTarget,
     max_target_delay_ms: int | None = None,
-    sample_interval_ms: int | None = 5000,  #space between two training samples
+    sample_interval_ms: int | None = 5000,  #minimum space between two training samples
 ) -> tuple[np.ndarray, np.ndarray]:
     feature_names = tuple(feature_names)
     feature_extractor.reset()
@@ -303,11 +308,19 @@ def create_training_samples_trend(
                 and target_delay_ms > max_target_delay_ms):
                 continue
 
+            actual_target = target.create_target(oldest.target_context, snapshot)
+
+            if actual_target is None:
+                continue
+
+            if not np.isfinite(actual_target):
+                continue
+
             #actual value
-            future_change = current_crypto_price - oldest.current_value
+            #future_change = current_crypto_price - oldest.current_value
             
             X_rows.append(oldest.feature_values)
-            y_values.append(future_change)
+            y_values.append(float(actual_target))
 
         extracted = feature_extractor.update_and_extract(snapshot)
 
@@ -325,11 +338,18 @@ def create_training_samples_trend(
             < sample_interval_ms):
             continue
 
+        target_context = target.create_context(extracted, snapshot)
+
+        if target_context is None:
+            continue
+
+        feature_values = extracted.features.select_values(feature_names)
+
         pending.append(
             PendingTrainingRow(
                 prediction_timestamp=extracted.timestamp,
-                current_value=extracted.current_crypto_price,
-                feature_values=extracted.features.select_values(feature_names),
+                target_context=target_context,
+                feature_values=feature_values,
             )
         )
         last_training_sample_timestamp = extracted.timestamp
@@ -348,95 +368,13 @@ def create_training_samples_trend(
     )
 
 
-def create_training_samples(
-    snapshots: Sequence[MarketSnapshot],
-    feature_extractor: MarketFeatureExtractor,
-    feature_names: Sequence[str],
-    horizon_ms: int,
-    max_target_delay_ms: int | None = None,
-) -> tuple[np.ndarray, np.ndarray]:
-    feature_names = tuple(feature_names)
-    feature_extractor.reset()
-    pending: deque[PendingTrainingRow] = deque()
-
-    X_rows: list[tuple[float, ...]] = []
-    y_values: list[float] = []
-
-    for index, snapshot in enumerate(snapshots):
-        type(snapshot)
-        if not isinstance(snapshot, MarketSnapshot):
-            print(index)
-            print(len(snapshot))
-            print(type(snapshot).__name__)
-            # raise TypeError(
-            #     f"Expected MarketSnapshot at index {index}, "
-            #     f"got {type(snapshot).__name__}: "
-            #     f"{snapshot!r}"
-            # )
-        
-        current_midpoint = snapshot.up_book.midpoint
-
-        if current_midpoint is None:
-            continue
-
-        # Resolve previous feature rows whose targets have arrived
-        while pending:
-            oldest = pending[0]
-
-            requested_target_timestamp = oldest.prediction_timestamp + horizon_ms
-            if snapshot.timestamp < requested_target_timestamp:
-                break
-
-            pending.popleft()
-
-            target_delay_ms = snapshot.timestamp - requested_target_timestamp
-
-            if (max_target_delay_ms is not None
-                and target_delay_ms > max_target_delay_ms):
-                continue
-
-            #actual value
-            future_change = current_midpoint - oldest.current_value
-
-            X_rows.append(oldest.feature_values)
-            y_values.append(future_change)
-
-        extracted = feature_extractor.update_and_extract(snapshot)
-
-        if extracted is None:
-            continue
-        else:
-            print(extracted)
-
-        if not extracted.features.has_all(feature_names):
-            continue
-
-        pending.append(
-            PendingTrainingRow(
-                prediction_timestamp=extracted.timestamp,
-                current_value=extracted.current_midpoint,
-                feature_values=extracted.features.select_values(feature_names),
-            )
-        )
-
-    feature_count = len(feature_names)
-
-    if not X_rows:
-        return (
-            np.empty(shape=(0, feature_count), dtype=float,),
-            np.empty(shape=(0,), dtype=float,),
-        )
-
-    return (
-        np.asarray(X_rows, dtype=float),
-        np.asarray(y_values, dtype=float),
-    )
 
 def create_training_dataset(
     markets: Sequence[Sequence[MarketSnapshot]],
     feature_extractor,
     feature_names: Sequence[str],
     horizon_ms: int,
+    target: TrainingTarget,
     max_target_delay_ms: int | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     X_parts: list[np.ndarray] = []
@@ -453,12 +391,13 @@ def create_training_dataset(
         #     max_target_delay_ms=max_target_delay_ms
         # )
 
-        X_market, y_market = create_training_samples_trend(
+        X_market, y_market = create_training_samples(
             snapshots=snapshots,
             feature_extractor=extractor,
             feature_names=feature_names,
             horizon_ms=horizon_ms,
-            max_target_delay_ms=max_target_delay_ms
+            max_target_delay_ms=max_target_delay_ms,
+            target=target
         )
 
         if len(X_market) == 0:
@@ -504,6 +443,7 @@ def prepare_training_data(
     feature_extractor: MarketFeatureExtractor,
     feature_names: Sequence[str],
     horizon_ms: int,
+    target: TrainingTarget,
     max_target_delay_ms: int | None = None,
     sample_interval_ms: int | None = 5000,
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -528,12 +468,14 @@ def prepare_training_data(
         market_snapshots = prepare_market_snapshots(data)
         del data
 
-        X_market, y_market = create_training_samples_trend(
+        X_market, y_market = create_training_samples(
             snapshots=market_snapshots,
             feature_extractor=feature_extractor,
             feature_names=feature_names,
             horizon_ms=horizon_ms,
-            max_target_delay_ms=max_target_delay_ms
+            max_target_delay_ms=max_target_delay_ms,
+            target=target,
+            sample_interval_ms=sample_interval_ms,
         )
 
         del market_snapshots
@@ -572,7 +514,7 @@ def get_test_paths(dataset_paths):
 def get_train_paths(dataset_paths):
     train_paths = []
     days = 5
-    older_than_time = days * 24 * 60 * 60  # 10 days in
+    older_than_time = days * 24 * 60 * 60
     newer_than_timestamp = 1783286309.0 # 5.7.2026.
     
     for dataset in dataset_paths:
@@ -711,6 +653,7 @@ def main():
                                                      crypto_range_windows_ms=(5000,15000, 30000)),
             #feature_extractor=MarketFeatureExtractor(),
             feature_names=GRADIENT_BOOSTING_FEATURES,
+            target=CRYPTO_CHANGE_TARGET,
             horizon_ms=3000,
             max_target_delay_ms=1000,
         )
@@ -736,9 +679,9 @@ def main():
             target_name="normalized_crypto_trend",
             gradient_boosting_features=GRADIENT_BOOSTING_FEATURES,
             training_samples=training_samples,
-            market_name="ethereum-up-or-down",
+            market_name="bitcoin-up-or-down",
         )
-        joblib.dump(predictor.model, "bot/trained_models/trend_model_eth_2.joblib")
+        #joblib.dump(predictor.model, "bot/trained_models/model_name.joblib")
         start_evaluation(predictor, test_paths=test_paths)
     else:
         test_paths=get_test_paths(dataset_paths=dataset_paths)
