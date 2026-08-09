@@ -37,6 +37,22 @@ class MarketSnapshot:
     price_to_beat: float | None = None
 
 
+@dataclass
+class MarketMetadata:
+    market_id: str | None = None
+    slug: str | None = None
+
+    up_asset_id: str | None = None
+    down_asset_id: str | None = None
+
+    event_start_timestamp: int | None = None
+    end_timestamp: int | None = None
+
+    price_to_beat: float | None = None
+    final_price: float | None = None
+    resolved_outcome: str | None = None
+
+
 
 @dataclass
 class PredictionObservation:
@@ -48,6 +64,7 @@ class PredictionObservation:
     predicted_value: float
     actual_value: float
     current_value: float | None
+    current_midpoint: float | None
 
     context: dict[str, Any] | None = None
 

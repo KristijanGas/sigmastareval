@@ -1,12 +1,13 @@
 
-from evaluator.prediction_evaluator.prediction_eval_dataclasses import NumericPrediction, MarketSnapshot, PredictionObservation
+from evaluator.prediction_evaluator.prediction_eval_dataclasses import MarketMetadata, NumericPrediction, MarketSnapshot, PredictionObservation
 from collections import deque
 
 
 class FutureTargetMatcher:
-    def __init__(self):
+    def __init__(self, market_metadata: MarketMetadata = None, max_target_delay_ms: int = 1000):
         self.pending: deque[NumericPrediction] = deque()
-        self.max_target_delay_ms = 1000
+        self.max_target_delay_ms = max_target_delay_ms
+        self.market_metadata: MarketMetadata = market_metadata
 
     def reset(self):
         self.pending.clear()
@@ -33,6 +34,7 @@ class FutureTargetMatcher:
                 continue
 
             actual_value = self.get_actual_value(prediction=prediction, snapshot=snapshot)
+            #print(actual_value)
             if actual_value is None:
                 continue
 
@@ -45,6 +47,7 @@ class FutureTargetMatcher:
                 #predicted_value = prediction.context["predicted_crypto_change"],
                 actual_value = actual_value,
                 current_value = prediction.current_value,
+                current_midpoint=snapshot.up_book.midpoint,
                 )
             
             observations.append(observation)
@@ -87,6 +90,16 @@ class FutureTargetMatcher:
             return float(
                 (future_price - current_price) / volatility
             )
+
+        if prediction.target == "outcome_probability":
+            resolved_outcome = self.market_metadata.resolved_outcome
+            if resolved_outcome is None:
+                return None
+            if resolved_outcome == "UP":
+                return 1
+            if resolved_outcome == "DOWN":
+                return 0
+
 
         raise ValueError(
             f"Unsupported prediction target: {prediction.target}"
