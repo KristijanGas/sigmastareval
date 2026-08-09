@@ -1,6 +1,3 @@
-
-from pathlib import Path
-import sys
 import streamlit as st
 
 #APP_TITLE = "Bot Performance Analysis"
@@ -12,7 +9,7 @@ import streamlit as st
 
 
 def main() -> None:
-   # st.set_page_config(page_title=APP_TITLE, layout="wide")
+   st.set_page_config(page_title="Bot Evaluator", layout="wide")
    # st.title(APP_TITLE)
 
    bot_analysis_page = st.Page(
@@ -27,11 +24,17 @@ def main() -> None:
       icon="⚖️",
    )
 
-   predictor_analysis_page = st.Page(
-      "ui/predictor_analysis/predictor_analysis_page.py",
-      title="Predictor Analysis",
-      icon="📈",
+   model_training_page = st.Page(
+      "ui/predictor_analysis/model_training_page.py",
+      title="Model Training",
+      icon="🦾",
    )
+
+   # model_evalutaion_page = st.Page(
+   #    "ui/predictor_analysis/model_evaluation_page.py",
+   #    title="Model Evaluation",
+   #    icon="📈",
+   # )
 
 
    page = st.navigation({
@@ -39,12 +42,11 @@ def main() -> None:
          bot_analysis_page,
          comparison_page,
       ],
-      "Predictor Analysis": [
-         predictor_analysis_page,
+      "Prediction Models": [
+         model_training_page,
+         #model_evalutaion_page,
       ],
-      # "Data": [
-      #    data_page,
-      # ],
+
    })
 
    page.run()

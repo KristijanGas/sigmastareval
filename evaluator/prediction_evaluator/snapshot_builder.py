@@ -19,6 +19,7 @@ class SnapshotBuilder:
 
     def build(self, raw_clobs: list[Any], raw_prices: list[dict[str, Any]]):
         books = self.prepare_books(raw_clobs)
+
         crypto_prices = self.prepare_prices(raw_prices)
 
         crypto_timestamps = [price.timestamp for price in crypto_prices]
@@ -32,6 +33,7 @@ class SnapshotBuilder:
 
         while index < len(books):
             timestamp = books[index].timestamp
+            #print(books[index])
 
             # Process every book update with this timestamp before
             # creating a snapshot.
@@ -90,16 +92,16 @@ class SnapshotBuilder:
         for entry in raw_clobs:
 
             #raw_book = unwrap_clob_entry(entry)
-            up_book = unwrap_clob_entry(entry[0])
-            down_book = unwrap_clob_entry(entry[1])
+            up_book, up_asset_id = unwrap_clob_entry(entry[0])
+            down_book, down_asset_id = unwrap_clob_entry(entry[1])
             
             if up_book is not None:
                 #print(type(up_book))
-                book = parse_order_book(up_book)
+                book = parse_order_book(up_book, up_asset_id)
                 books.append(book)
 
             if down_book is not None:
-                book = parse_order_book(down_book)
+                book = parse_order_book(down_book, down_asset_id)
                 books.append(book)
 
         books.sort(key=lambda book: book.timestamp)
@@ -139,10 +141,16 @@ class SnapshotBuilder:
         return price
         
 
-def parse_order_book(raw_book: dict[str, Any]):
+def parse_order_book(raw_book: dict[str, Any], book_asset_id):
 
+    #print(raw_book)
     timestamp = int(raw_book["timestamp"])
-    asset_id = str(raw_book["asset_id"])
+    if "asset_id" in raw_book:
+        asset_id = str(raw_book["asset_id"])
+    elif book_asset_id is not None:
+        asset_id = book_asset_id
+    else:
+        asset_id = None
 
     bids = raw_book.get("bids")
     asks = raw_book.get("asks")
@@ -192,27 +200,20 @@ def parse_order_book(raw_book: dict[str, Any]):
 
 
 def prepare_order_book(raw_clob):
-    up_book = unwrap_clob_entry(raw_clob[0])
-    down_book = unwrap_clob_entry(raw_clob[1])
+    up_book, up_asset_id = unwrap_clob_entry(raw_clob[0])
+    down_book, down_asset_id = unwrap_clob_entry(raw_clob[1])
     if up_book is not None:
         #print(type(up_book))
-        up_book = parse_order_book(up_book)
+        up_book = parse_order_book(up_book, up_asset_id)
 
     if down_book is not None:
-        down_book = parse_order_book(down_book)
+        down_book = parse_order_book(down_book, down_asset_id)
     return up_book, down_book
 
 
 def unwrap_clob_entry(entry):
-
-    # for value in entry:
-    #     if (
-    #         isinstance(value, dict)
-    #         and "timestamp" in value
-    #         and "asset_id" in value
-    #     ):
-    #         return value
-    return entry[1]
+    #entry[0] is asset_id and entry[1] is orderbook dict
+    return entry[1], entry[0]
 
 def create_snapshot(data_provider: historical_provider):
     timestamp = data_provider.get_current_timestamp()

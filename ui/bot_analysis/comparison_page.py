@@ -349,50 +349,72 @@ def main() -> None:
     names_a.reverse()
     names_b.reverse()
 
+    if "comparison_pair" not in st.session_state:
+        st.session_state.comparison_pair = None
+
     if st.session_state.get("comparison_market_a") not in names_a:
         st.session_state.comparison_market_a = names_a[0]
 
     # Render the two run selectors side by side.
-    selector_left, selector_button, selector_right = st.columns([5, 1, 5])
 
-    with selector_left:
-        market_a = st.selectbox(
-            "Run A",
-            names_a,
-            key="comparison_market_a",
+    with st.form("comparison_form"):
+        selector_left, selector_button, selector_right = st.columns([5, 1, 5])
+
+        with selector_left:
+            market_a = st.selectbox(
+                "Run A",
+                names_a,
+                key="comparison_market_a",
+            )
+            st.caption(f"Source A: {directory_a}")
+
+        # If the same market exists in Run B, use it as the initial comparison target.
+        if st.session_state.get("comparison_market_b") not in names_b:
+            st.session_state.comparison_market_b = market_a if market_a in names_b else names_b[0]
+
+        # def select_matching_b() -> None:
+        #     selected_a = st.session_state.get("comparison_market_a")
+        #     if selected_a in names_b:
+        #         st.session_state.comparison_market_b = selected_a
+
+        # with selector_button:
+        #     st.write("")
+        #     st.write("")
+        #     st.button(
+        #         "Match B",
+        #         on_click=select_matching_b,
+        #         disabled=market_a not in names_b,
+        #         help="Select the Run B item with the same market name as Run A.",
+        #         width="stretch",
+        #     )
+
+        with selector_right:
+            market_b = st.selectbox(
+                "Run B",
+                names_b,
+                key="comparison_market_b",
+            )
+            st.caption(f"Source B: {directory_b}")
+
+        path_a = [Path(market_a)]
+        path_b = [Path(market_b)]
+
+        submitted = st.form_submit_button(
+            "Start comparison",
+            type="primary",
+            width="content",
         )
-        st.caption(f"Source A: {directory_a}")
 
-    # If the same market exists in Run B, use it as the initial comparison target.
-    if st.session_state.get("comparison_market_b") not in names_b:
-        st.session_state.comparison_market_b = market_a if market_a in names_b else names_b[0]
 
-    # def select_matching_b() -> None:
-    #     selected_a = st.session_state.get("comparison_market_a")
-    #     if selected_a in names_b:
-    #         st.session_state.comparison_market_b = selected_a
-
-    # with selector_button:
-    #     st.write("")
-    #     st.write("")
-    #     st.button(
-    #         "Match B",
-    #         on_click=select_matching_b,
-    #         disabled=market_a not in names_b,
-    #         help="Select the Run B item with the same market name as Run A.",
-    #         width="stretch",
-    #     )
-
-    with selector_right:
-        market_b = st.selectbox(
-            "Run B",
-            names_b,
-            key="comparison_market_b",
+    if submitted:
+        st.session_state.comparison_pair = (
+            market_a,
+            market_b,
         )
-        st.caption(f"Source B: {directory_b}")
 
-    path_a = [Path(market_a)]
-    path_b = [Path(market_b)]
+    if st.session_state.comparison_pair is None:
+        st.info("Choose Run A and Run B, then click Start comparison.")
+        return
 
 
     analyzers_a, results_a, frame_a, errors_a = load_all_markets(path_a, initial_balance)
