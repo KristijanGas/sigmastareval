@@ -1,17 +1,16 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
-import hashlib
-import json
-from pathlib import Path
-from typing import Any, Sequence
+
 
 import pandas as pd
 import streamlit as st
 
 from evaluator.prediction_evaluator.model_training import (
     TASK_BINARY_CLASSIFICATION,
+    build_validation_signature,
     get_task_type,
+    validate_model_configuration,
 )
 from evaluator.prediction_evaluator.model_training_utils import DatasetSplit, collect_market_paths, split_paths_chronologically
 from evaluator.prediction_evaluator.training_targets import CRYPTO_CHANGE_TARGET, OUTCOME_PROBABILITY_TARGET, TrainingTarget
@@ -64,31 +63,25 @@ def parse_int_tuple(value: str) -> tuple[int, ...]:
     return tuple(values)
 
 
-# creates a signature for everything that affects base estimator validation
-# signature is used to compare changes in model and training configuration
-def build_validation_signature(
-    split: DatasetSplit,
-    target: TrainingTarget,
-    feature_names: Sequence[str],
-    feature_extractor_config: dict[str, Any],
-    horizon_ms: int,
-    max_target_delay_ms: int | None,
-    sample_interval_ms: int | None,
-    estimator_params: dict[str, Any],
-) -> str:
-    payload = {
-        "train_paths": [str(Path(p)) for p in split.train_paths],
-        "validation_paths": [str(Path(p)) for p in split.validation_paths],
-        "target_name": target.name,
-        "feature_names": list(feature_names),
-        "feature_extractor_config": feature_extractor_config,
-        "horizon_ms": int(horizon_ms),
-        "max_target_delay_ms": max_target_delay_ms,
-        "sample_interval_ms": sample_interval_ms,
-        "estimator_params": estimator_params,
+def experiment_row(result, target, feature_names, estimator_params):
+    row = {
+        "Validated": result.validated_at,   #time of validation
+        "Target": target.name,
+        "Features": ", ".join(feature_names),
+        "Feature count": len(feature_names),
+        "Learning rate": estimator_params["learning_rate"],
+        "Max leaf nodes": estimator_params["max_leaf_nodes"],
+        "Min samples leaf": estimator_params["min_samples_leaf"],
+        "L2": estimator_params["l2_regularization"],
+        "Requested max iter": estimator_params["max_iter"],
+        "Selected max iter": result.selected_max_iter,
+        "Signature": result.configuration_signature,
     }
-    encoded = json.dumps(payload, sort_keys=True, default=str).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()[:16]
+    row.update(result.validation_metrics)  #metrics computed after validation
+    return row
+
+def format_metric(value):
+    return "N/A" if value is None else f"{value:.6g}"
 
 
 st.session_state.setdefault("validated_model_configs", {})
@@ -335,18 +328,66 @@ validate_clicked = st.button(
 )
 
 if validate_clicked:
-    st.write("Nothing happening yet. Implementing soon...")
+    status = st.status("Validating candidate configuration…", expanded=True)
+
+    def validation_progress(message: str) -> None:
+        status.write(message)
+
+    try:
+        validation_result = validate_model_configuration(
+            split=split,
+            target=target,
+            feature_names=feature_names,
+            feature_extractor_config=extractor_config,
+            horizon_ms=int(horizon_ms),
+            max_target_delay_ms=max_target_delay_ms,
+            sample_interval_ms=int(sample_interval_ms) if sample_interval_ms > 0 else None,
+            estimator_params=estimator_params,
+            progress=validation_progress,
+        )
+        st.session_state["validated_model_configs"][validation_result.configuration_signature] = validation_result
+        st.session_state["validation_experiments"].append(
+            experiment_row(validation_result, target, feature_names, estimator_params)
+        )
+        st.session_state["last_validation_signature"] = validation_result.configuration_signature
+        status.update(label="Validation complete", state="complete", expanded=False)
+    except Exception as exc:
+        status.update(label="Validation failed", state="error", expanded=True)
+        st.exception(exc)
 
 
 
-
+# used to display results of last completed validation
 current_validation = (
     st.session_state["validated_model_configs"].get(current_signature)
     if current_signature is not None
     else None
 )
 
-st.subheader("8. Train & save final model")
+if current_validation is not None:
+    st.success("The current base-model configuration has been validated.")
+    metric_cols = st.columns(max(1, len(current_validation.validation_metrics)))
+    for col, (name, value) in zip(metric_cols, current_validation.validation_metrics.items()):
+        col.metric(name, format_metric(value))
+    st.caption(
+        f"Selected boosting iterations: {current_validation.selected_max_iter} · "
+        f"Early stopping: {current_validation.early_stopping_source} · "
+        f"Signature: {current_validation.configuration_signature}"
+    )
+else:
+    st.info("Validate the current base-model configuration before final training is enabled.") #if no models were validated before
+
+
+experiments = st.session_state.get("validation_experiments", [])
+if experiments:
+    st.subheader("Validation experiments")
+    st.dataframe(pd.DataFrame(experiments), hide_index=True, width="stretch")
+    if st.button("Clear validation history"):
+        st.session_state["validation_experiments"] = []
+        st.session_state["validated_model_configs"] = {}
+        st.rerun()
+
+st.subheader("8. Train & save final model (not implemented yet)")
 st.caption(
     "The final base estimator is refitted on train + validation using the iteration count selected above. "
     "Calibration is then fitted separately, and both objects (base and calibrated) are stored in the same artifact."

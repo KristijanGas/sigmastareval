@@ -10,6 +10,7 @@ import zlib
 import joblib
 import ast
 import math
+from sklearn.metrics import accuracy_score, brier_score_loss, log_loss, roc_auc_score
 
 
 
@@ -600,6 +601,34 @@ def start_evaluation(predictor, test_paths, max_target_delay_ms, observation_int
 
     #plot_prediction_observations(observations)
     #plot_prediction_accuracy(observations)
+
+
+def compute_metrics(task_type: str, y_true: np.ndarray, predictions: np.ndarray) -> dict[str, float | None]:
+    y_true = np.asarray(y_true)
+    predictions = np.asarray(predictions, dtype=float)
+
+    if len(y_true) == 0:
+        return {}
+
+    # if task_type == TASK_REGRESSION:
+    #     return {
+    #         "MAE": float(mean_absolute_error(y_true, predictions)),
+    #         "RMSE": float(np.sqrt(mean_squared_error(y_true, predictions))),
+    #         "R²": float(r2_score(y_true, predictions)) if len(y_true) > 1 else None,
+    #     }
+
+    # for now - only binary classifier
+    y_int = y_true.astype(int)
+    clipped = np.clip(predictions, 1e-9, 1 - 1e-9) #clips close-zero to zero and close-to-one to one
+    metrics: dict[str, float | None] = {
+        "Brier score": float(brier_score_loss(y_int, clipped)),
+        "Log loss": float(log_loss(y_int, clipped, labels=[0, 1])),
+        "Accuracy @ 0.5": float(accuracy_score(y_int, clipped >= 0.5)), #measures how often predicted probability gives the correct binary UP/DOWN outcome when using 0.5 as the decision threshold
+    }
+    metrics["ROC AUC"] = (
+        float(roc_auc_score(y_int, clipped)) if len(np.unique(y_int)) == 2 else None
+    )
+    return metrics
 
 
 def train_model(
