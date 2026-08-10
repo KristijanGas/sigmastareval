@@ -6,6 +6,10 @@ import re
 def sort_paths_chronologically(paths):
     return sorted(paths, key=extract_datetime)
 
+@staticmethod
+def is_newer_than(path1, path2):
+    return extract_datetime(path1) > extract_datetime(path2)
+
 def extract_datetime(path):
     UNIX_TIMESTAMP_RE = re.compile(r"-(\d{10})(?=\.gz$)")
     READABLE_DATE_RE = re.compile(

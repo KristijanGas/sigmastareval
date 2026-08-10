@@ -41,7 +41,7 @@ class OrderBookFeed:
             "custom_feature_enabled": True
         }
         ws.send(json.dumps(subscribe_payload))
-        print(f"Subscription frame sent for asset: {self.asset_id}")
+        print(f"Subscription frame sent for assets: {self.asset_ids}")
 
     def _on_error(self, ws, error):
         print(f"WebSocket Error: {error}")

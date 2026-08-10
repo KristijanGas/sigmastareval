@@ -3,7 +3,7 @@ import random
 import subprocess
 import sys
 import time
-
+import utils.utils as utils
 
 bot_path = sys.argv[1]
 dataset_paths = sys.argv[2:]
@@ -14,10 +14,11 @@ for dataset in dataset_paths:
     for data_file in Path(dataset).glob("*.gz"):
         print(f"Found data file: {data_file}")
         file = data_file.resolve()
-        newer_than_time = 1 * 24 * 60 * 60  # 1 day in seconds
+        newer_than_time = "august-3-2026-12pm-et"
         #newer_than_time = None
-        file_creation_date = data_file.stat().st_ctime
-        if newer_than_time is not None and file_creation_date < time.time() - newer_than_time:
+        #file_creation_date = data_file.stat().st_ctime
+        #if newer_than_time is not None and file_creation_date < time.time() - newer_than_time:
+        if not utils.is_newer_than(file, newer_than_time):
             #print(f"  Skipping {gz_file} (too old)")
             continue
         files.append(file)

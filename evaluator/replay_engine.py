@@ -158,7 +158,7 @@ class replay_engine:
         self.bot.first_run_setup()
         correct_book = 0
         starting_timestamp = data["all_prices"][crypto_index]["timestamp"]
-        step_ms = 201
+        step_ms = 51
         for current_timestamp in range(starting_timestamp, self.data_provider.get_end_timestamp() + step_ms, step_ms):
             self.data_provider.set_current_timestamp(current_timestamp)
             
