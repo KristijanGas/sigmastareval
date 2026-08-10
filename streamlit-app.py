@@ -24,6 +24,12 @@ def main() -> None:
       icon="⚖️",
    )
 
+   live_passive_trading_page = st.Page(
+      "ui/passive_trading/live_dashboard_page.py",
+      title="Live Passive Trading",
+      icon="🟢",
+   )
+
    model_training_page = st.Page(
       "ui/predictor_analysis/model_training_page.py",
       title="Model Training",
@@ -41,6 +47,9 @@ def main() -> None:
       "Bot Analysis": [
          bot_analysis_page,
          comparison_page,
+      ],
+      "Passive Trading": [
+         live_passive_trading_page,
       ],
       "Prediction Models": [
          model_training_page,

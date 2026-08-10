@@ -224,3 +224,5 @@ __marimo__/
 .aider*
 
 .streamlit_cache/
+
+.runtime/
