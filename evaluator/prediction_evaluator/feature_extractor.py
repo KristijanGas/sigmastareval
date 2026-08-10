@@ -47,7 +47,7 @@ class MarketFeatureExtractor:
       self,
       midpoint_lookbacks_ms: Sequence[int] = (3000, 10000, 30000),
       binance_lookbacks_ms: Sequence[int] = (3000, 10000, 30000),
-      imbalance_levels: Sequence[int] = (1,3,5),
+      imbalance_levels: Sequence[int] = (2,3,5),
       crypto_range_windows_ms: Sequence[int] = (10000, 30000),
       binance_volatility_windows_ms=(10000, 15000),
 
