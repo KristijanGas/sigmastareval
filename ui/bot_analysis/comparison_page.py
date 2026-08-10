@@ -135,6 +135,7 @@ class RunComparator:
 
 
 def midpoint_frame(analyzer: PerformanceAnalyzer) -> pd.DataFrame:
+    analyzer.load_data()
     data = analyzer.data or {}
     labels = data.get("asset_labels", {}) or {}
     rows = []
@@ -155,6 +156,7 @@ def midpoint_frame(analyzer: PerformanceAnalyzer) -> pd.DataFrame:
                 }
             )
 
+    del analyzer.data
     frame = pd.DataFrame(rows)
     if not frame.empty:
         frame = frame.sort_values(["asset", "timestamp"], kind="stable")
@@ -218,6 +220,8 @@ def render_summary(comparator: RunComparator) -> None:
         width="stretch",
     )
 
+    comparator.analyzer_a.load_data()
+
     left, right = st.columns(2)
     with left:
         st.subheader("Run A metadata")
@@ -231,6 +235,9 @@ def render_summary(comparator: RunComparator) -> None:
             },
             expanded=False,
         )
+    del comparator.analyzer_a.data
+
+    comparator.analyzer_b.load_data()
     with right:
         st.subheader("Run B metadata")
         st.json(
@@ -243,6 +250,7 @@ def render_summary(comparator: RunComparator) -> None:
             },
             expanded=False,
         )
+    del comparator.analyzer_b.data
 
 
 
@@ -251,6 +259,7 @@ def render_replays(comparator: RunComparator) -> None:
         "These are the existing per-run replay figures. For synchronized zooming, use the Equity and Market data tabs."
     )
 
+    comparator.analyzer_a.load_data()
     left, right = st.columns(2)
     with left:
         st.subheader("Run A")
@@ -264,6 +273,9 @@ def render_replays(comparator: RunComparator) -> None:
         except Exception as exc:
             st.error(f"Run A replay failed: {type(exc).__name__}: {exc}")
 
+    del comparator.analyzer_a.data
+
+    comparator.analyzer_b.load_data()
     with right:
         st.subheader("Run B")
         try:
@@ -275,6 +287,7 @@ def render_replays(comparator: RunComparator) -> None:
             )
         except Exception as exc:
             st.error(f"Run B replay failed: {type(exc).__name__}: {exc}")
+    del comparator.analyzer_b.data
 
 
 def render_errors(label: str, errors: list[dict[str, str]]) -> None:

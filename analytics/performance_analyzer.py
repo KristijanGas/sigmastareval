@@ -19,6 +19,16 @@ class PerformanceAnalyzer:
         self.performance_result = None
         self.data = None
 
+    def load_data(self):
+        if str(self.analytics_path).endswith(".gz"):
+            with gzip.open(self.analytics_path, "rt", encoding="utf-8") as f:
+                self.data = json.load(f)
+                #print("used gzip.open")
+        else:
+            with open(self.analytics_path, "r", encoding="utf-8") as f:
+                #print("used normal open")
+                self.data = json.load(f)
+
     def analyze(self):
         self.performance_result = PerformanceResult()
         if str(self.analytics_path).endswith(".gz"):
