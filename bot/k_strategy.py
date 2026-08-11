@@ -44,7 +44,6 @@ class KStrategy(masterbot):
         #parameters
         self.time_volatility_alpha = 1050
         self.correction_treshold = 0.04
-        self.max_slow_drawdown = 0.07
         self.correction_time_window = 10000
         self.investment_cash_percent = 0.2
         self.lookahead_time = 0 #use 3000 if using GradientBoostingPredictor
@@ -94,39 +93,14 @@ class KStrategy(masterbot):
         dif_down_shares = wanted_down_shares - self.down_shares
         if dif_up_shares > 0:
             dif_up_shares = min(dif_up_shares, self.data_provider.can_buy_with(self.up_token_id, self.get_usable_cash()))
-            self.place_order_with_cash_check(OrderType.GTD, self.up_token_id, OrderAction.BID, dif_up_shares, self.up_price + 0.02, timeout=1000)
+            self.place_order_with_cash_check(OrderType.GTD, self.up_token_id, OrderAction.BID, dif_up_shares, self.up_price + 0.03, timeout=1000)
         if dif_down_shares > 0:
             dif_down_shares = min(dif_down_shares, self.data_provider.can_buy_with(self.down_token_id, self.get_usable_cash()))
-            self.place_order_with_cash_check(OrderType.GTD, self.down_token_id, OrderAction.BID, dif_down_shares, self.down_price + 0.02, timeout=1000)
+            self.place_order_with_cash_check(OrderType.GTD, self.down_token_id, OrderAction.BID, dif_down_shares, self.down_price + 0.03, timeout=1000)
         if dif_up_shares < 0:
             self.place_order_with_cash_check(OrderType.GTD, self.up_token_id, OrderAction.ASK, -dif_up_shares, max(projected_up_value,0.01), timeout=1000)
         if dif_down_shares < 0:
             self.place_order_with_cash_check(OrderType.GTD, self.down_token_id, OrderAction.ASK, -dif_down_shares, max(projected_down_value,0.01), timeout=1000)
-
-    def manage_inventory(self, time_factor, predicted_trend):
-        moving_mean = self.data_provider.get_moving_mean()
-        mean_projected_up_value, mean_projected_down_value = self.estimate_share_value(moving_mean, time_factor, predicted_trend)
-        if self.up_shares > 0 and self.max_mean_up is None:
-            self.max_mean_up = mean_projected_up_value
-        if self.down_shares > 0 and self.max_mean_down is None:
-            self.max_mean_down = mean_projected_down_value
-        if self.up_shares == 0:
-            self.max_mean_up = None
-        if self.down_shares == 0:
-            self.max_mean_down = None
-        if self.max_mean_up is not None:
-            self.max_mean_up = max(self.max_mean_up, mean_projected_up_value)
-        if self.max_mean_down is not None:
-            self.max_mean_down = max(self.max_mean_down, mean_projected_down_value)
-        #print(f"Max Mean UP: {self.max_mean_up}, Max Mean DOWN: {self.max_mean_down}")
-        if self.max_mean_up is not None and self.max_mean_up - mean_projected_up_value > self.max_slow_drawdown:
-            #print("Selling UP shares")
-            #print(f"Max Mean UP: {self.max_mean_up}, Mean Projected UP: {mean_projected_up_value}")
-            self.place_order_with_cash_check(OrderType.GTD, self.up_token_id, OrderAction.ASK, self.up_shares, self.up_price+0.02, timeout=5000)
-        if self.max_mean_down is not None and self.max_mean_down - mean_projected_down_value > self.max_slow_drawdown:
-            #print("Selling DOWN shares")
-            #print(f"Max Mean DOWN: {self.max_mean_down}, Mean Projected DOWN: {mean_projected_down_value}")
-            self.place_order_with_cash_check(OrderType.GTD, self.down_token_id, OrderAction.ASK, self.down_shares, self.down_price+0.02, timeout=5000)
 
     def update_cash_reservations(self):
         orders = self.market.get_asset_orders(self.up_token_id, OrderAction.BID)
@@ -212,8 +186,6 @@ class KStrategy(masterbot):
             print(f"Error fetching mid price: {e}")
             return False
 
-        #kalman_filtered = self.data_provider.get_kalman_filtered(self.kalman_window_size)
-        #velocity = float(kalman_filtered[-1]["price"])
         time_remaining = (self.data_provider.get_end_timestamp() -current_timestamp) / 1000.0
         time_factor = (1 - (self.time_volatility_alpha / (time_remaining + self.time_volatility_alpha)))
         predicted_trend = 0.0
@@ -257,7 +229,5 @@ class KStrategy(masterbot):
         elif edge_down > self.edge_threshold * (1 + 2 * time_factor):
             self.manage_desired_inventory(0, desired_shares, projected_up_value, projected_down_value)
         self.update_estimation_alpha(current_timestamp, self.up_price, projected_up_value)
-        if moving_mean is not None:
-            #self.manage_inventory(time_factor, predicted_trend)
-            pass
+
         return True
