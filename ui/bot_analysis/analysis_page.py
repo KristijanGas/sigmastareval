@@ -803,23 +803,24 @@ def equity_frame(analyzer: PerformanceAnalyzer) -> pd.DataFrame:
 
 
 def render_replay_graph(analyzer: PerformanceAnalyzer, market_name: str) -> None:
-
-   try:
-      fig = draw_replay_graph(analyzer.data)
-      st.plotly_chart(
-         fig,
-         width="stretch",
-         config={
-               "scrollZoom": True,
-               "displayModeBar": True,
-               "displaylogo": False,
-         },
-      )
-   except Exception as exc:
-      st.error(
-         f"Replay graph failed: "
-         f"{type(exc).__name__}: {exc}"
-      )
+    analyzer.load_data()
+    try:
+        fig = draw_replay_graph(analyzer.data)
+        st.plotly_chart(
+            fig,
+            width="stretch",
+            config={
+                "scrollZoom": True,
+                "displayModeBar": True,
+                "displaylogo": False,
+            },
+        )
+    except Exception as exc:
+        st.error(
+            f"Replay graph failed: "
+            f"{type(exc).__name__}: {exc}"
+        )
+    del analyzer.data
 
 
 def gauge_chart(
