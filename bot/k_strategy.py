@@ -30,26 +30,22 @@ class KStrategy(masterbot):
         self.money_reserved_for_down = 0.0
         self.up_shares = 0.0
         self.down_shares = 0.0
-        self.past_weighted_trends = deque()
-        self.past_trends_windowsize = 20000
         self.trend_alpha = 1.0
         self.first_different_estimate_timestamp = None
         self.estimation_direction = 0
-        self.max_mean_up = None
-        self.max_mean_down = None
         self.predictor = None
         self.last_logged_timestamp = None
         self.predictor = polynomial_predictor()
 
         #parameters
-        self.time_volatility_alpha = 1050
-        self.correction_treshold = 0.04
-        self.correction_time_window = 10000
         self.investment_cash_percent = 0.2
-        self.lookahead_time = 0 #use 3000 if using GradientBoostingPredictor
-        self.edge_threshold = 0.04
-        self.crypto_price_stdev = {"bitcoin-up-or-down": 300, "ethereum-up-or-down": 10.4, "solana-up-or-down": 0.6, "xrp-up-or-down": 0.0068,
-                                   "btc-updown-5m": 10, "eth-updown-5m": 10.4}  # Example values for standard deviation of crypto prices
+        # rest come from config loading
+        self.time_volatility_alpha = None
+        self.correction_treshold = None
+        self.correction_time_window = None
+        self.lookahead_time = None
+        self.edge_threshold = None
+        self.crypto_price_stdev = None
 
     def first_run_setup(self):
         super().first_run_setup()
@@ -59,8 +55,6 @@ class KStrategy(masterbot):
         #                                     lookahead_time=self.lookahead_time)
         # else:
         #     self.predictor.reset()
-
-        self.past_weighted_trends.clear()
         self.predictor.price_to_beat = self.price_to_beat
         self.trend_alpha = 1.0
     
@@ -147,7 +141,7 @@ class KStrategy(masterbot):
             self.first_different_estimate_timestamp = current_timestamp
 
     def estimate_share_value(self, crypto_value, time_factor, predicted_trend):
-        current_updown_value = (crypto_value - self.price_to_beat) / (self.crypto_price_stdev.get(self.market.base_name) * self.trend_alpha)
+        current_updown_value = (crypto_value - self.price_to_beat) / (self.crypto_price_stdev * self.trend_alpha)
         current_updown_value /= (time_factor)**2
         projected_up_value = 0.5 * (1 + erf((predicted_trend + current_updown_value) / sqrt(2)))
         projected_down_value = 1 - projected_up_value
@@ -194,7 +188,7 @@ class KStrategy(masterbot):
             self.lookahead_time,
             current_timestamp, 
             self.data_provider.get_end_timestamp(), 
-            self.crypto_price_stdev[self.market.base_name],
+            self.crypto_price_stdev,
             crypto_value
             )
         '''
