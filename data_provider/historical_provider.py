@@ -260,15 +260,16 @@ class historical_provider:
 
     def set_order_book(self, order_book):
         for asset in order_book:
-            self.order_book[asset[0]] = {}
-            self.order_book[asset[0]]["bids"] = {}
-            self.order_book[asset[0]]["asks"] = {}
+            book = asset[0]
+            self.order_book[book] = {}
+            self.order_book[book]["bids"] = {}
+            self.order_book[book]["asks"] = {}
             if asset[1] is None:
                 return 0
             for level in asset[1].get("bids", []):
-                self.order_book[asset[0]]["bids"][float(level["price"])] = float(level["size"])
+                self.order_book[book]["bids"][float(level["price"])] = float(level["size"])
             for level in asset[1].get("asks", []):
-                self.order_book[asset[0]]["asks"][float(level["price"])] = float(level["size"])
+                self.order_book[book]["asks"][float(level["price"])] = float(level["size"])
         return 1
 
     def set_price_to_beat(self, price_to_beat):

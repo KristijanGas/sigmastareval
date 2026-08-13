@@ -6,10 +6,11 @@ from pathlib import Path
 from enum import Enum
 from importlib import import_module
 from importlib.util import module_from_spec, spec_from_file_location
-import json
+import orjson # type: ignore | pip install orjson
 import threading
 import zlib
-
+from isal import igzip # type: ignore | pip install isal
+from time import perf_counter
 
 
 if __package__ is None or __package__ == "":
@@ -165,7 +166,7 @@ class replay_engine:
         step_ms = self.step_ms
         for current_timestamp in range(starting_timestamp, self.data_provider.get_end_timestamp() + step_ms, step_ms):
             self.data_provider.set_current_timestamp(current_timestamp)
-            
+            order_book_to_set = None
             while book_index < len(data["all_clobs"]):
                 if data["all_clobs"][book_index] is None:
                     book_index += 1
@@ -179,7 +180,8 @@ class replay_engine:
                     break
                 else:
                     order_book = data["all_clobs"][book_index]
-                    correct_book = self.data_provider.set_order_book(order_book)
+                    order_book_to_set = order_book
+                    #correct_book = self.data_provider.set_order_book(order_book)
                     book_never_set = False
                     book_index += 1
 
@@ -197,7 +199,8 @@ class replay_engine:
                     self.data_provider.set_crypto_value(data["all_prices"][crypto_index])
                     crypto_never_set = False
                     crypto_index += 1
-            
+            if order_book_to_set is not None:
+                correct_book = self.data_provider.set_order_book(order_book_to_set)
             if crypto_never_set or book_never_set or not correct_book:
                 continue
 
@@ -260,16 +263,29 @@ class replay_engine:
         dataset_path = sort_paths_chronologically(dataset_path)
         outcomes = []
         for gz_file in dataset_path:
-            with gzip.open(gz_file, "rt", encoding="utf-8") as f:
+            start = perf_counter()
+            with igzip.open(gz_file, "rt", encoding="utf-8") as f:
+                compressed_open = perf_counter()
+                raw = f.read()
+                decompressed = perf_counter()
                 try:
-                    data = json.load(f)
-                except (json.JSONDecodeError, zlib.error) as e:
+                    data = orjson.loads(raw)
+                except (orjson.JSONDecodeError, zlib.error) as e:
                     print(f"Error decoding JSON from {gz_file}: {e}")
                     continue
+                
+                parsed = perf_counter()
+                #print(f"read/decompress: {decompressed - compressed_open:.3f}s")
+                #print(f"JSON parse:      {parsed - decompressed:.3f}s")
+                #print(f"total:           {parsed - start:.3f}s")
+                #print(f"size:            {len(raw) / 1024**3:.2f} GiB")
+                raw = None  # Free memory
                 self.bot.past_crypto_predictions.clear()
                 analytics = self.evaluate_datapoint(data, gz_file, starting_cash)
+                evaluated = perf_counter()
+                #print(f"Evaluation time: {evaluated - parsed:.3f}s")
                 if analytics is not None:
-                    starting_cash = analytics["final_cash"]
+                    #starting_cash = analytics["final_cash"]
                     analytics_path = self.get_analysis_path(gz_file)
                     if self.save_analytics:
                         analytics_path.parent.mkdir(parents=True, exist_ok=True)
