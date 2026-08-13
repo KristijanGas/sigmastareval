@@ -39,16 +39,17 @@ def mutate_cfg(current_config, parameters_metadata, count):
     mutations = []
     
     for i in range(count):
-        mutation_count = random.randint(1, min(len(parameters_metadata), 3))
+        mutation_count = random.randint(1, min(len(parameters_metadata), 4))
         mutation = current_config.copy()
         for _ in range(mutation_count):
             param_to_mutate = random.choice(list(parameters_metadata.keys()))
             param_info = parameters_metadata[param_to_mutate]
             current_value = mutation[param_to_mutate]
             current_value += param_info["step"] * random.choice([-1, 1])
-            current_value = round(current_value,6)
-            mutation[param_to_mutate] = min(current_value, param_info["max"])
-            mutation[param_to_mutate] = max(current_value, param_info["min"])
+            current_value = round(current_value, 6)
+            current_value = min(current_value, param_info["max"])
+            current_value = max(current_value, param_info["min"])
+            mutation[param_to_mutate] = current_value
         mutations.append(mutation)
 
     print(mutations)
@@ -100,7 +101,7 @@ def main():
 
                 for future in as_completed(futures):
                     geometric_ROI, combination = future.result()
-
+                    print(geometric_ROI,best_roi)
                     if geometric_ROI > best_roi:
                         best_roi = geometric_ROI
                         current_parameters = combination
@@ -114,6 +115,7 @@ def main():
                 print("Terminating all parameter adjustment processes...")
                 executor.shutdown(wait=False, cancel_futures=True)
                 print("All parameter adjustment processes terminated.")
+                return
 
 if __name__ == "__main__":
     main()

@@ -264,7 +264,7 @@ class replay_engine:
     def evaluate_dataset(self, dataset_path: list[Path]):
 
         starting_cash = 100
-        dataset_path = sort_paths_chronologically(dataset_path)
+        #dataset_path = sort_paths_chronologically(dataset_path)
         outcomes = []
         start_time = perf_counter()
         for gz_file in dataset_path:
@@ -273,36 +273,36 @@ class replay_engine:
                 compressed_open = perf_counter()
                 try:
                     raw = f.read()
+                    f.close()
                 except Exception as e:
                     print(f"Error reading {gz_file}: {e}")
                     continue
-                decompressed = perf_counter()
-                try:
-                    data = orjson.loads(raw)
-                except Exception as e:
-                    print(f"Error decoding JSON from {gz_file}: {e}")
-                    continue
-                
-                parsed = perf_counter()
-                #print(f"read/decompress: {decompressed - compressed_open:.3f}s")
-                #print(f"JSON parse:      {parsed - decompressed:.3f}s")
-                #print(f"total:           {parsed - start:.3f}s")
-                #print(f"size:            {len(raw) / 1024**3:.2f} GiB")
-                raw = None  # Free memory
-                self.bot.past_crypto_predictions.clear()
-                analytics = self.evaluate_datapoint(data, gz_file, starting_cash)
-                evaluated = perf_counter()
-                #print(f"Evaluation time: {evaluated - parsed:.3f}s")
-                if analytics is not None:
-                    #starting_cash = analytics["final_cash"]
-                    analytics_path = self.get_analysis_path(gz_file)
-                    if self.save_analytics:
-                        analytics_path.parent.mkdir(parents=True, exist_ok=True)
-                        analytics_path.write_text(json.dumps(analytics, indent=2, default=_json_default), encoding="utf-8")
-                        print(f"Saved analytics to {analytics_path}, final cash: {analytics['final_cash']}")
-                    outcomes.append((round(analytics["final_cash"], 2), analytics_path))
-                data.clear()
-                f.close()
+            decompressed = perf_counter()
+            try:
+                data = orjson.loads(raw)
+            except Exception as e:
+                print(f"Error decoding JSON from {gz_file}: {e}")
+                continue
+            
+            parsed = perf_counter()
+            raw = None  # Free memory
+            self.bot.past_crypto_predictions.clear()
+            analytics = self.evaluate_datapoint(data, gz_file, starting_cash)
+            evaluated = perf_counter()
+            #print(f"read/decompress: {decompressed - compressed_open:.3f}s")
+            #print(f"JSON parse:      {parsed - decompressed:.3f}s")
+            #print(f"total:           {parsed - start:.3f}s")
+            #print(f"size:            {len(raw) / 1024**3:.2f} GiB")
+            #print(f"Evaluation time: {evaluated - parsed:.3f}s")
+            if analytics is not None:
+                #starting_cash = analytics["final_cash"]
+                analytics_path = self.get_analysis_path(gz_file)
+                if self.save_analytics:
+                    analytics_path.parent.mkdir(parents=True, exist_ok=True)
+                    analytics_path.write_text(json.dumps(analytics, indent=2, default=_json_default), encoding="utf-8")
+                    print(f"Saved analytics to {analytics_path}, final cash: {analytics['final_cash']}")
+                outcomes.append((round(analytics["final_cash"], 2), analytics_path))
+            data.clear()
         end_time = perf_counter()
         #print(f"Processed {len(dataset_path)} files in {end_time - start_time:.3f}s")
         return outcomes
