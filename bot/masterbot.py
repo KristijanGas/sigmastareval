@@ -15,28 +15,32 @@ class masterbot(ABC):
 
     
     def first_run_setup(self):
-            self.market_base_name = self.market.base_name
-            self.starting_cash = self.market.get_user_cash()
-            self.unusable_cash = self.starting_cash * (1 - self.investment_cash_percent)
-            self.clob_token_ids = self.data_provider.get_market_asset_ids()
-            self.price_to_beat = self.data_provider.get_price_to_beat()
-            predictor = getattr(self, "predictor", None)
-            if predictor is not None:
-                self.predictor.price_to_beat = self.price_to_beat
-            self.up_token_id = self.data_provider.get_up_token_id()
-            self.down_token_id = self.data_provider.get_down_token_id()
-            self.first_run = False
-            #self.past_crypto_predictions = []
-            self.order_library = []
-            self.load_config()
+        self.market_base_name = self.market.base_name
+        self.starting_cash = self.market.get_user_cash()
+        self.unusable_cash = self.starting_cash * (1 - self.investment_cash_percent)
+        self.clob_token_ids = self.data_provider.get_market_asset_ids()
+        self.price_to_beat = self.data_provider.get_price_to_beat()
+        predictor = getattr(self, "predictor", None)
+        if predictor is not None:
+            self.predictor.price_to_beat = self.price_to_beat
+        self.up_token_id = self.data_provider.get_up_token_id()
+        self.down_token_id = self.data_provider.get_down_token_id()
+        self.first_run = False
+        #self.past_crypto_predictions = []
+        self.order_library = []
+        config_data = self.load_config().get("parameters")
+        self.set_config(config_data)
 
     def load_config(self):
-         class_name = self.__class__.__name__
-         path_to_cfg = f"bot/configs/{class_name}/{self.market_base_name}.cfg"
-         with open(path_to_cfg, "r") as f:
-            config = json.load(f).get("parameters")
-            for key, value in config.items():
-                setattr(self, key, value)
+        class_name = self.__class__.__name__
+        path_to_cfg = f"bot/configs/{class_name}/{self.market_base_name}.cfg"
+        with open(path_to_cfg, "r") as f:
+            config_data = json.load(f)
+        return config_data
+
+    def set_config(self, config):
+        for key, value in config.items():
+            setattr(self, key, value)
 
     @abstractmethod
     def run(self):

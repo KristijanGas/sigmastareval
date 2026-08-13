@@ -10,8 +10,6 @@ import json
 import threading
 import zlib
 
-from utils.utils import sort_paths_chronologically
-
 
 
 if __package__ is None or __package__ == "":
@@ -21,6 +19,7 @@ if __package__ is None or __package__ == "":
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
+from utils.utils import sort_paths_chronologically
 
 def _json_default(value):
     if isinstance(value, Enum):
@@ -35,11 +34,13 @@ from data_provider.historical_provider import historical_provider
 from bot.prediction_models.nostradamus import nostradamus
 
 class replay_engine:
-    def __init__(self, bot: masterbot, reset_bot_between_runs=True):
+    def __init__(self, bot: masterbot, reset_bot_between_runs=True, save_analytics=False, step_ms=126, custom_config=None):
         self.bot = bot
         self.reset_bot_between_runs = reset_bot_between_runs
         self.strategy_only_evaluation = False
-
+        self.save_analytics = save_analytics
+        self.step_ms = step_ms
+        self.custom_config = custom_config
 
     def initialize_environment(self, starting_cash, data, filename):
         """
@@ -156,9 +157,12 @@ class replay_engine:
         crypto_never_set = True
         book_index = 0
         self.bot.first_run_setup()
+        if self.custom_config is not None:
+            self.bot.set_config(self.custom_config)
+
         correct_book = 0
         starting_timestamp = data["all_prices"][crypto_index]["timestamp"]
-        step_ms = 51
+        step_ms = self.step_ms
         for current_timestamp in range(starting_timestamp, self.data_provider.get_end_timestamp() + step_ms, step_ms):
             self.data_provider.set_current_timestamp(current_timestamp)
             
@@ -254,6 +258,7 @@ class replay_engine:
 
         starting_cash = 100
         dataset_path = sort_paths_chronologically(dataset_path)
+        outcomes = []
         for gz_file in dataset_path:
             with gzip.open(gz_file, "rt", encoding="utf-8") as f:
                 try:
@@ -264,19 +269,21 @@ class replay_engine:
                 self.bot.past_crypto_predictions.clear()
                 analytics = self.evaluate_datapoint(data, gz_file, starting_cash)
                 if analytics is not None:
-                    #starting_cash = analytics["final_cash"]
+                    starting_cash = analytics["final_cash"]
                     analytics_path = self.get_analysis_path(gz_file)
-                    analytics_path.parent.mkdir(parents=True, exist_ok=True)
-                    analytics_path.write_text(json.dumps(analytics, indent=2, default=_json_default), encoding="utf-8")
-                    print(f"Saved analytics to {analytics_path}, final cash: {analytics['final_cash']}")
-                    #outcomes.append((round(analytics["final_cash"], 2), analytics_path))
+                    if self.save_analytics:
+                        analytics_path.parent.mkdir(parents=True, exist_ok=True)
+                        analytics_path.write_text(json.dumps(analytics, indent=2, default=_json_default), encoding="utf-8")
+                        print(f"Saved analytics to {analytics_path}, final cash: {analytics['final_cash']}")
+                    outcomes.append((round(analytics["final_cash"], 2), analytics_path))
                 data.clear()
                 f.close()
+        return outcomes
         #for outcome, analytics_path in outcomes:
         #    print(f"Final cash outcome: {outcome}, analytics saved at: {analytics_path}")
         #print(f"Average final cash outcome for dataset {dataset_path}: {sum(cash for cash, _ in outcomes) / len(outcomes) if outcomes else 0}")
 
-
+@staticmethod
 def load_bot(class_path: str) -> masterbot:
     """
     class_path example:
@@ -336,7 +343,7 @@ def main():
     bot = load_bot(sys.argv[1])
     datafile_paths = sys.argv[2:]
     print(f"Loaded bot: {bot.__class__.__name__}")
-    evaluator = replay_engine(bot, reset_bot_between_runs=False)
+    evaluator = replay_engine(bot, reset_bot_between_runs=False, save_analytics=True, step_ms=126)
     evaluator.evaluate_dataset(datafile_paths)
 
 if __name__ == "__main__":

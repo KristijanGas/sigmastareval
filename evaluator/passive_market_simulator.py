@@ -69,6 +69,7 @@ class passive_market_simulator(market_simulator):
                         final_price = self.data_provider.get_crypto_value()
                         print(f"Final price: {final_price}, Price to beat: {self.price_to_beat}, Outcomes: {self.outcomes}, CLOB Token IDs: {self.clobTokenIds}")
                         resolution = self.resolve_market(final_price, self.price_to_beat, self.outcomes, self.clobTokenIds)
+                        print(f"Market resolution: {resolution}")
                         self.store_analytics(resolution)
                         self.old_time_name = time_name
                         break

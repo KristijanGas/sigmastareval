@@ -344,7 +344,7 @@ class market_simulator:
         
         self.order_id_counter = 0
         self.new_order = {}
-        print(f"Market resolved. Winning asset: {winning_asset}, Winning asset ID: {winning_token_id}, Final price: {final_price}. User cash: {self.current_cash}")
+        #print(f"Market resolved. Winning asset: {winning_asset}, Winning asset ID: {winning_token_id}, Final price: {final_price}. User cash: {self.current_cash}")
         return winning_asset
         
         

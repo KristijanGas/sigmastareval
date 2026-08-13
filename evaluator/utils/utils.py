@@ -8,7 +8,7 @@ def sort_paths_chronologically(paths):
 
 @staticmethod
 def is_newer_than(path1, path2):
-    return extract_datetime(path1) > extract_datetime(path2)
+    return extract_datetime(path1) >= extract_datetime(path2)
 
 def extract_datetime(path):
     UNIX_TIMESTAMP_RE = re.compile(r"-(\d{10})(?=\.gz$)")
