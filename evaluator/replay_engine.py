@@ -195,7 +195,8 @@ class replay_engine:
                 if crypto_value_timestamp > current_timestamp:
                     break
                 else:
-                    crypto_prices.append(data["all_prices"][crypto_index])
+                    if self.save_analytics:
+                        crypto_prices.append(data["all_prices"][crypto_index])
                     self.data_provider.set_crypto_value(data["all_prices"][crypto_index])
                     crypto_never_set = False
                     crypto_index += 1
@@ -206,28 +207,31 @@ class replay_engine:
 
             self.data_provider.update_moving_mean()
             asset_ids = self.data_provider.get_market_asset_ids()
-            for asset_id in asset_ids:
-                mid_price = self.data_provider.get_mid_price(asset_id)
-                mid_prices[asset_id].append({"mid_price": mid_price, "timestamp": current_timestamp})
+            if self.save_analytics:
+                for asset_id in asset_ids:
+                    mid_price = self.data_provider.get_mid_price(asset_id)
+                    mid_prices[asset_id].append({"mid_price": mid_price, "timestamp": current_timestamp})
 
             self.bot.run()
             self.market.process_orders()
-            holdings_history.append(
-                {
-                    "timestamp": current_timestamp,
-                    "holdings": {
-                        asset_id: self.market.get_user_holdings().get(asset_id, 0)
-                        for asset_id in asset_ids
-                    },
-                }
-            )
-            cash_history.append(
-                {
-                    "timestamp": current_timestamp,
-                    "cash": self.market.get_user_cash(),
-                }
-            )
-            timestamps.append(current_timestamp)
+            if self.save_analytics:
+                holdings_history.append(
+                    {
+                        "timestamp": current_timestamp,
+                        "holdings": {
+                            asset_id: self.market.get_user_holdings().get(asset_id, 0)
+                            for asset_id in asset_ids
+                        },
+                    }
+                )
+                cash_history.append(
+                    {
+                        "timestamp": current_timestamp,
+                        "cash": self.market.get_user_cash(),
+                    }
+                )
+                timestamps.append(current_timestamp)
+
         final_price = self.eventMetadata.get("finalPrice")
         price_to_beat = self.eventMetadata.get("priceToBeat")
         resolution = self.market.resolve_market(final_price, price_to_beat, outcomes, clobTokenIds)
@@ -262,15 +266,20 @@ class replay_engine:
         starting_cash = 100
         dataset_path = sort_paths_chronologically(dataset_path)
         outcomes = []
+        start_time = perf_counter()
         for gz_file in dataset_path:
             start = perf_counter()
             with igzip.open(gz_file, "rt", encoding="utf-8") as f:
                 compressed_open = perf_counter()
-                raw = f.read()
+                try:
+                    raw = f.read()
+                except Exception as e:
+                    print(f"Error reading {gz_file}: {e}")
+                    continue
                 decompressed = perf_counter()
                 try:
                     data = orjson.loads(raw)
-                except (orjson.JSONDecodeError, zlib.error) as e:
+                except Exception as e:
                     print(f"Error decoding JSON from {gz_file}: {e}")
                     continue
                 
@@ -294,6 +303,8 @@ class replay_engine:
                     outcomes.append((round(analytics["final_cash"], 2), analytics_path))
                 data.clear()
                 f.close()
+        end_time = perf_counter()
+        #print(f"Processed {len(dataset_path)} files in {end_time - start_time:.3f}s")
         return outcomes
         #for outcome, analytics_path in outcomes:
         #    print(f"Final cash outcome: {outcome}, analytics saved at: {analytics_path}")

@@ -1,4 +1,5 @@
 from random import shuffle
+import random
 import sys
 import json
 from statistics import geometric_mean
@@ -6,42 +7,52 @@ from matplotlib.pyplot import step
 import utils.utils
 import replay_engine
 from pathlib import Path
-
+import threading
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 #finds the best possible parameters that maximize ROI over all combinations of allowed parameters
+def try_config(args):
+    strategy_path, combination, files = args
 
-def build_combinations(config_file):
-    all_combinations = [{}]
+    roi = calculate_roi(strategy_path, combination, files)
+
+    return roi, combination
+
+def calculate_roi(strategy_path, combination, files):
+    bot = replay_engine.load_bot(strategy_path)
+    engine = replay_engine.replay_engine(bot, reset_bot_between_runs=False, save_analytics=False, step_ms=126, custom_config=combination)
+    outcomes = engine.evaluate_dataset(files)
+    final_cash_list = [outcome[0] for outcome in outcomes]
+    geometric_ROI = geometric_mean(final_cash_list) / 100.0 - 1.0
+    return geometric_ROI
+
+def load_cfg(config_file):
     with open(config_file, "r") as f:
-        config = json.load(f)
-        config_metadata = config.get("parameters_metadata", {})
+        config_data = json.load(f)
+    return config_data
 
-        for param, values in config_metadata.items():
-            min_value = values["min"]
-            max_value = values["max"]
-            step = values["step"]
+def store_new_params(config_path, config_data):
+    with open(config_path, "w") as f:
+        json.dump(config_data, f, indent=4)
 
-            new_combinations = []
+def mutate_cfg(current_config, parameters_metadata, count):
+    mutations = []
+    
+    for i in range(count):
+        mutation_count = random.randint(1, min(len(parameters_metadata), 3))
+        mutation = current_config.copy()
+        for _ in range(mutation_count):
+            param_to_mutate = random.choice(list(parameters_metadata.keys()))
+            param_info = parameters_metadata[param_to_mutate]
+            current_value = mutation[param_to_mutate]
+            current_value += param_info["step"] * random.choice([-1, 1])
+            current_value = round(current_value,6)
+            mutation[param_to_mutate] = min(current_value, param_info["max"])
+            mutation[param_to_mutate] = max(current_value, param_info["min"])
+        mutations.append(mutation)
 
-            current_value = min_value
-            print((max_value - min_value) / step, param)
-            while current_value <= max_value:
-                for combination in all_combinations:
-                    new_combination = combination.copy()
-                    new_combination[param] = current_value
-                    new_combinations.append(new_combination)
-
-                current_value += step
-
-            all_combinations = new_combinations
-    if len(all_combinations) == 0:
-        print("No parameter combinations found. Please check the config file.")
-        sys.exit(1)
-    print(len(all_combinations), "parameter combinations found.")
-    if len(all_combinations) > 2000:
-        print(f"Too many parameter combinations found. Please refine the config file. {len(all_combinations)}, max 2000")
-        sys.exit(1)
-    return all_combinations
+    print(mutations)
+    return mutations
 
 def build_files(dataset_path, from_optional):
     files = []
@@ -68,22 +79,42 @@ def main():
         from_optional = sys.argv[4]
 
     files = build_files(dataset_path, from_optional)
-    combinations = build_combinations(config_file)
-    shuffle(combinations)
-    best_roi = -1.0
-    for combination in combinations:
-        bot = replay_engine.load_bot(strategy_path)
-        engine = replay_engine.replay_engine(bot, reset_bot_between_runs=False, save_analytics=False, step_ms=126, custom_config=combination)
-        outcomes = engine.evaluate_dataset(files)
-        final_cash_list = [outcome[0] for outcome in outcomes]
-        geometric_ROI = geometric_mean(final_cash_list) / 100.0 - 1.0
-        if geometric_ROI > best_roi:
-            best_roi = geometric_ROI
-            print(f"New best ROI: {best_roi:.4%} with parameters:")
-            for param, value in combination.items():
-                print(f"  \"{param}\": {value},")
+    config_data = load_cfg(config_file)
+    best_roi = config_data.get("best_roi", -1.0)
+    current_parameters = config_data.get("parameters", {})
+    parameters_metadata = config_data.get("parameters_metadata", {})
+    thread_count = 5
+    while True:
+        combinations = mutate_cfg(current_parameters, parameters_metadata, thread_count)
 
+        jobs = [
+            (strategy_path, combination, files)
+            for combination in combinations
+        ]
+        with ProcessPoolExecutor(max_workers=thread_count) as executor:
+            try:
+                futures = [
+                    executor.submit(try_config, job)
+                    for job in jobs
+                ]
 
+                for future in as_completed(futures):
+                    geometric_ROI, combination = future.result()
+
+                    if geometric_ROI > best_roi:
+                        best_roi = geometric_ROI
+                        current_parameters = combination
+                        config_data["best_roi"] = best_roi
+                        config_data["parameters"] = current_parameters
+                        store_new_params(config_file, config_data)
+                        print(f"New best ROI: {best_roi:.4%} with parameters:")
+                        for param, value in combination.items():
+                            print(f"  \"{param}\": {value},")
+            except KeyboardInterrupt:
+                print("Terminating all parameter adjustment processes...")
+                executor.shutdown(wait=False, cancel_futures=True)
+                print("All parameter adjustment processes terminated.")
 
 if __name__ == "__main__":
     main()
+#python evaluator/parameter_adjuster.py bot/k_strategy.py bot/configs/KStrategy/bitcoin-up-or-down.cfg datasets/bitcoin-up-or-down august-3-2026-12pm-et
