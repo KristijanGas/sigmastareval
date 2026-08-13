@@ -3,11 +3,9 @@ import random
 import sys
 import json
 from statistics import geometric_mean
-from matplotlib.pyplot import step
 import utils.utils
 import replay_engine
 from pathlib import Path
-import threading
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 #finds the best possible parameters that maximize ROI over all combinations of allowed parameters
@@ -85,6 +83,7 @@ def main():
     current_parameters = config_data.get("parameters", {})
     parameters_metadata = config_data.get("parameters_metadata", {})
     thread_count = 5
+    should_store = True
     while True:
         combinations = mutate_cfg(current_parameters, parameters_metadata, thread_count)
 
@@ -107,7 +106,8 @@ def main():
                         current_parameters = combination
                         config_data["best_roi"] = best_roi
                         config_data["parameters"] = current_parameters
-                        store_new_params(config_file, config_data)
+                        if should_store:
+                            store_new_params(config_file, config_data)
                         print(f"New best ROI: {best_roi:.4%} with parameters:")
                         for param, value in combination.items():
                             print(f"  \"{param}\": {value},")

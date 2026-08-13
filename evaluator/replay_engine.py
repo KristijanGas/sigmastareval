@@ -264,7 +264,7 @@ class replay_engine:
     def evaluate_dataset(self, dataset_path: list[Path]):
 
         starting_cash = 100
-        #dataset_path = sort_paths_chronologically(dataset_path)
+        dataset_path = sort_paths_chronologically(dataset_path)
         outcomes = []
         start_time = perf_counter()
         for gz_file in dataset_path:
@@ -285,7 +285,7 @@ class replay_engine:
                 continue
             
             parsed = perf_counter()
-            raw = None  # Free memory
+            del raw
             self.bot.past_crypto_predictions.clear()
             analytics = self.evaluate_datapoint(data, gz_file, starting_cash)
             evaluated = perf_counter()
