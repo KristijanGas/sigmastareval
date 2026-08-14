@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
+from pathlib import Path
 
 
 import pandas as pd
@@ -10,6 +11,7 @@ from evaluator.prediction_evaluator.model_training import (
     TASK_BINARY_CLASSIFICATION,
     build_validation_signature,
     get_task_type,
+    train_and_save_final_model,
     validate_model_configuration,
 )
 from evaluator.prediction_evaluator.model_training_utils import DatasetSplit, collect_market_paths, split_paths_chronologically
@@ -29,6 +31,8 @@ KNOWN_FEATURES = (
     "imbalance_top_1",
     "imbalance_top_3",
     "imbalance_top_5",
+    "bid_volume_top_2",
+    "ask_volume_top_2",
     "bid_volume_top_5",
     "ask_volume_top_5",
     "binance_return_1000",
@@ -400,3 +404,77 @@ train_final_clicked = st.button(
     width="content",
 )
 
+if train_final_clicked:
+    artifact_path = Path(model_directory) / f"{model_name}.joblib"
+    status = st.status("Training final model…", expanded=True)
+
+    def training_progress(message: str) -> None:
+        status.write(message)
+
+    try:
+        result = train_and_save_final_model(
+            split=split,
+            target=target,
+            feature_names=feature_names,
+            feature_extractor_config=extractor_config,
+            horizon_ms=int(horizon_ms),
+            max_target_delay_ms=max_target_delay_ms,
+            sample_interval_ms=int(sample_interval_ms) if sample_interval_ms > 0 else None,
+            estimator_params=estimator_params,
+            calibration_method=calibration_method,
+            artifact_path=artifact_path,
+            validated_signature=current_validation.configuration_signature,
+            validation_metrics=current_validation.validation_metrics,
+            selected_max_iter=current_validation.selected_max_iter,
+            progress=training_progress,
+        )
+        st.session_state["last_model_training_result"] = result
+        status.update(label="Final model saved", state="complete", expanded=False)
+    except Exception as exc:
+        status.update(label="Final training failed", state="error", expanded=True)
+        st.exception(exc)
+
+
+result = st.session_state.get("last_model_training_result")
+if result is not None:
+    st.divider()
+    st.subheader("Last saved model")
+    st.success(f"Saved artifact: {result.artifact_path}")
+
+    artifact = result.artifact
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Base estimator", artifact.get("base_estimator_type", "unknown"))
+    c2.metric("Calibration", artifact.get("calibration_method", "none"))
+    c3.metric("Calibrator", artifact.get("calibrator_type") or "None")
+
+    st.info(
+        "The base estimator and calibrator are saved as separate trained/fitted objects inside of the artifact. "
+        "The base estimator (not calibrated) is usable by itself even when calibration is present."
+    )
+
+
+    st.dataframe(pd.DataFrame(result.split_summary), hide_index=True, width="content")
+
+    if result.calibration_raw_metrics is not None and result.calibration_calibrated_metrics is not None:
+        st.subheader("Calibration-fit diagnostics")
+        rows = []
+        for metric_name in result.calibration_raw_metrics:
+            rows.append(
+                {
+                    "Metric": metric_name,
+                    "Raw on calibration data": result.calibration_raw_metrics.get(metric_name),
+                    "Calibrated on calibration data": result.calibration_calibrated_metrics.get(metric_name),
+                }
+            )
+        st.dataframe(pd.DataFrame(rows), hide_index=True, width="content")
+        st.caption(
+            "These are in-sample calibration diagnostics because the calibrator was fitted on this same calibration split. "
+            "Use the untouched Model Evaluation page for the real raw-vs-calibrated comparison."
+        )
+
+    with st.expander("Saved artifact metadata"):
+        metadata = {
+            k: v for k, v in artifact.items()
+            if k not in {"base_estimator", "calibrator"}
+        }
+        st.json(metadata, expanded=False)
