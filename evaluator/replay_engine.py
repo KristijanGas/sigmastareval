@@ -370,7 +370,7 @@ def main():
     bot = load_bot(sys.argv[1])
     datafile_paths = sys.argv[2:]
     print(f"Loaded bot: {bot.__class__.__name__}")
-    evaluator = replay_engine(bot, reset_bot_between_runs=False, save_analytics=True, step_ms=126)
+    evaluator = replay_engine(bot, reset_bot_between_runs=False, save_analytics=True, step_ms=51)
     evaluator.evaluate_dataset(datafile_paths)
 
 if __name__ == "__main__":

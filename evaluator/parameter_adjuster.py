@@ -10,15 +10,15 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 
 #finds the best possible parameters that maximize ROI over all combinations of allowed parameters
 def try_config(args):
-    strategy_path, combination, files = args
+    strategy_path, combination, files, step = args
 
-    roi = calculate_roi(strategy_path, combination, files)
+    roi = calculate_roi(strategy_path, combination, files, step)
 
     return roi, combination
 
-def calculate_roi(strategy_path, combination, files):
+def calculate_roi(strategy_path, combination, files, step):
     bot = replay_engine.load_bot(strategy_path)
-    engine = replay_engine.replay_engine(bot, reset_bot_between_runs=False, save_analytics=False, step_ms=126, custom_config=combination)
+    engine = replay_engine.replay_engine(bot, reset_bot_between_runs=False, save_analytics=False, step_ms=step, custom_config=combination)
     outcomes = engine.evaluate_dataset(files)
     final_cash_list = [outcome[0] for outcome in outcomes]
     geometric_ROI = geometric_mean(final_cash_list) / 100.0 - 1.0
@@ -82,13 +82,14 @@ def main():
     best_roi = config_data.get("best_roi", -1.0)
     current_parameters = config_data.get("parameters", {})
     parameters_metadata = config_data.get("parameters_metadata", {})
-    thread_count = 5
+    thread_count = 10
+    step = 51
     should_store = True
     while True:
         combinations = mutate_cfg(current_parameters, parameters_metadata, thread_count)
 
         jobs = [
-            (strategy_path, combination, files)
+            (strategy_path, combination, files, step)
             for combination in combinations
         ]
         with ProcessPoolExecutor(max_workers=thread_count) as executor:
@@ -105,6 +106,7 @@ def main():
                         best_roi = geometric_ROI
                         current_parameters = combination
                         config_data["best_roi"] = best_roi
+                        config_data["step_used"] = step
                         config_data["parameters"] = current_parameters
                         if should_store:
                             store_new_params(config_file, config_data)
