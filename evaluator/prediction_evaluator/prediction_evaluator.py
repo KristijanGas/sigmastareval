@@ -10,7 +10,12 @@ import zlib
 import joblib
 import ast
 import math
+from sklearn.calibration import calibration_curve
 from sklearn.metrics import accuracy_score, brier_score_loss, log_loss, roc_auc_score
+
+#from evaluator.prediction_evaluator.model_training import PREDICTION_MODE_CALIBRATED, TASK_BINARY_CLASSIFICATION
+from evaluator.prediction_evaluator.model_training import ValidationRunResult, apply_calibrator, build_validation_signature, create_estimator, fit_candidate, get_task_type, predict_raw
+from evaluator.prediction_evaluator.model_training_utils import PREDICTION_MODE_CALIBRATED, PREDICTION_MODE_RAW, TASK_BINARY_CLASSIFICATION, TASK_REGRESSION, DatasetSplit, build_feature_extractor, data_summary, load_model_artifact
 
 
 
@@ -24,7 +29,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 from collections import deque
 from dataclasses import dataclass
 
-from typing import Any, Iterable, Sequence
+from typing import Any, Callable, Iterable, Sequence
 from datetime import datetime
 
 import numpy as np
@@ -34,7 +39,7 @@ from evaluator.utils.utils import extract_market_date, extract_timestamp, sort_p
 from evaluator.prediction_evaluator.future_target_matcher import FutureTargetMatcher
 from evaluator.prediction_evaluator.snapshot_builder import SnapshotBuilder
 from sklearn.ensemble import HistGradientBoostingRegressor, HistGradientBoostingClassifier
-from evaluator.prediction_evaluator.prediction_eval_dataclasses import MarketMetadata, MarketSnapshot, PredictionObservation, MarketAssets
+from evaluator.prediction_evaluator.prediction_eval_dataclasses import EvaluationRunResult, MarketMetadata, MarketSnapshot, PredictionObservation, MarketAssets
 
 # bot.prediction_models.linear_predictor import LinearPredictor
 #from bot.prediction_models.multi_window_linear_predictor import MultiWindowLinearPredictor
@@ -42,7 +47,7 @@ from evaluator.prediction_evaluator.prediction_eval_dataclasses import MarketMet
 #from bot.prediction_models.multi_window_regression_predictor import MultiWindowRegressionPredictor
 from bot.prediction_models.gradient_boosting_predictor import GradientBoostingPredictor
 from evaluator.prediction_evaluator.feature_extractor import MarketFeatureExtractor
-from evaluator.prediction_evaluator.training_targets import CRYPTO_CHANGE_TARGET, OUTCOME_PROBABILITY_TARGET, PendingTrainingRow, TrainingTarget
+from evaluator.prediction_evaluator.training_targets import CRYPTO_CHANGE_TARGET, OUTCOME_PROBABILITY_TARGET, PendingTrainingRow, TrainingTarget, resolve_target
 
 class PredictionEvaluator:
     def __init__(self, predictor, target_matcher: FutureTargetMatcher):
@@ -170,7 +175,192 @@ def extract_market_assets(metadata_start: list[dict[str, Any]], market_index: in
     )
 
 
-#OBAVEZNO PROVJERITI PRIJE JE LI DAJE DOBAR TIMESTAMP
+
+def evaluate_saved_model(
+    model_path: str | Path,
+    test_paths: Sequence[Path],
+    prediction_mode: str = PREDICTION_MODE_CALIBRATED,
+    max_target_delay_ms_override: int | None = None,
+    sample_interval_ms_override: int | None = None,
+    progress: Callable = None,
+    ) -> EvaluationRunResult:
+    artifact = load_model_artifact(model_path)
+    task_type = artifact["task_type"]
+    target = resolve_target(artifact["target_name"])
+    feature_names = tuple(artifact.get("feature_names", ()))
+    extractor_config = artifact.get("feature_extractor_config", {})
+    
+    horizon_ms = artifact.get("horizon_ms", 0)
+
+    if max_target_delay_ms_override is None:
+        max_target_delay_ms = artifact.get("max_target_delay_ms")
+    else:
+        max_target_delay_ms = max_target_delay_ms_override
+
+    if sample_interval_ms_override is None:
+        sample_interval_ms = artifact.get("sample_interval_ms", 5000)
+    else:
+        sample_interval_ms = sample_interval_ms_override
+
+
+    if not feature_names:
+        raise ValueError("The saved model has no feature metadata.")
+    if not test_paths:
+        raise ValueError("No test markets selected.")
+
+    if progress:
+        progress("Preparing test samples…")
+
+    X_test, y_test = prepare_training_data(
+        train_paths=test_paths,
+        feature_extractor=build_feature_extractor(extractor_config),
+        feature_names=feature_names,
+        horizon_ms=horizon_ms,
+        target=target,
+        max_target_delay_ms=max_target_delay_ms,
+        sample_interval_ms=sample_interval_ms,
+    )
+
+    if len(X_test) == 0:
+        raise ValueError("No evaluation samples were produced")
+
+    if task_type == TASK_BINARY_CLASSIFICATION:
+        y_test = y_test.astype(int)
+
+    if progress:
+        progress("Running base-estimator predictions…")
+
+    base_estimator = artifact["base_estimator"]
+    raw_predictions = predict_raw(base_estimator, task_type, X_test)
+
+    raw_metrics = None
+    calibrated_metrics = None
+    calibrated_predictions: np.ndarray | None = None
+    has_calibration = bool(artifact.get("has_calibrator") and artifact.get("calibrator") is not None)
+
+    if task_type == TASK_BINARY_CLASSIFICATION:
+        raw_metrics = compute_metrics(task_type, y_test, raw_predictions)
+        if has_calibration:
+            if progress:
+                progress("Applying saved calibrator…")
+            calibrated_predictions = apply_calibrator(
+                artifact.get("calibration_method", "none"),
+                artifact.get("calibrator"),
+                raw_predictions,
+            )
+            calibrated_metrics = compute_metrics(task_type, y_test, calibrated_predictions)
+
+        if prediction_mode == PREDICTION_MODE_CALIBRATED and has_calibration:
+            predictions = calibrated_predictions
+            metrics = calibrated_metrics
+            selected_prediction_mode = PREDICTION_MODE_CALIBRATED
+        else:
+            predictions = raw_predictions
+            metrics = raw_metrics
+            selected_prediction_mode = PREDICTION_MODE_RAW
+    else:
+        predictions = raw_predictions
+        metrics = compute_metrics(task_type, y_test, predictions)
+        selected_prediction_mode = PREDICTION_MODE_RAW
+
+    figures = build_evaluation_figures(
+        task_type=task_type,
+        y_true=y_test,
+        predictions=np.asarray(predictions),
+        raw_predictions=raw_predictions if task_type == TASK_BINARY_CLASSIFICATION else None,
+        calibrated_predictions=calibrated_predictions,
+    )
+
+    return EvaluationRunResult(
+        task_type=task_type,
+        metrics=metrics or {},
+        raw_metrics=raw_metrics,
+        calibrated_metrics=calibrated_metrics,
+        y_true=np.asarray(y_test),
+        predictions=np.asarray(predictions),
+        raw_predictions=np.asarray(raw_predictions) if task_type == TASK_BINARY_CLASSIFICATION else None,
+        calibrated_predictions=(
+            np.asarray(calibrated_predictions) if calibrated_predictions is not None else None
+        ),
+        selected_prediction_mode=selected_prediction_mode,
+        has_calibration=has_calibration,
+        figures=figures,
+        sample_count=len(y_test),
+        model_path=Path(model_path),
+    )
+
+def build_evaluation_figures(
+    task_type: str,
+    y_true: np.ndarray,
+    predictions: np.ndarray,
+    raw_predictions: np.ndarray | None = None,
+    calibrated_predictions: np.ndarray | None = None,
+) -> dict[str, Any]:
+    # if task_type == TASK_REGRESSION:
+    #     return {
+    #         "Predicted vs actual": plot_regression_scatter(y_true, predictions),
+    #         "Residual distribution": plot_residual_histogram(y_true, predictions),
+    #     }
+
+    return {
+        "Calibration curve": plot_calibration(
+            y_true,
+            raw_predictions=raw_predictions,
+            calibrated_predictions=calibrated_predictions,
+        ),
+        "Probability distribution": plot_probability_histogram(y_true, predictions),
+    }
+
+
+def plot_calibration(y_true, raw_predictions, calibrated_predictions):
+    fig, ax = plt.subplots(figsize=(7, 6))
+    ax.plot([0, 1], [0, 1], linestyle="--", label="Perfect calibration")
+
+    n_bins = min(10, max(3, len(y_true) // 50))
+
+    if raw_predictions is not None:
+        raw_frac_pos, raw_mean_pred = calibration_curve(
+            y_true.astype(int),
+            np.clip(raw_predictions, 0, 1),
+            n_bins=n_bins,
+            strategy="quantile",
+        )
+        ax.plot(raw_mean_pred, raw_frac_pos, marker="o", label="Raw base model")
+
+    if calibrated_predictions is not None:
+        cal_frac_pos, cal_mean_pred = calibration_curve(
+            y_true.astype(int),
+            np.clip(calibrated_predictions, 0, 1),
+            n_bins=n_bins,
+            strategy="quantile",
+        )
+        ax.plot(cal_mean_pred, cal_frac_pos, marker="o", label="Calibrated")
+
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    ax.set_xlabel("Mean predicted probability")
+    ax.set_ylabel("Observed UP frequency")
+    ax.set_title("Calibration curve")
+    ax.grid(alpha=0.25)
+    ax.legend()
+    fig.tight_layout()
+    return fig
+
+
+def plot_probability_histogram(y_true: np.ndarray, predictions: np.ndarray):
+    fig, ax = plt.subplots(figsize=(7, 5))
+    y_int = y_true.astype(int)
+    ax.hist(predictions[y_int == 0], bins=30, alpha=0.55, label="DOWN outcomes")
+    ax.hist(predictions[y_int == 1], bins=30, alpha=0.55, label="UP outcomes")
+    ax.set_xlim(0, 1)
+    ax.set_xlabel("Predicted P(UP)")
+    ax.set_ylabel("Samples")
+    ax.set_title("Predicted probability distribution")
+    ax.legend()
+    ax.grid(alpha=0.2)
+    fig.tight_layout()
+    return fig
+
 def iso_to_timestamp_ms(value: str):
     dt = datetime.fromisoformat(
         value.replace("Z", "+00:00")
@@ -179,7 +369,6 @@ def iso_to_timestamp_ms(value: str):
     return round(dt.timestamp() * 1000)
 
 
-# will move to separate metrics file later - here while testing
 def mae(observations: list[PredictionObservation]):
     if not observations:
         return None
@@ -512,6 +701,115 @@ def prepare_training_data(
     return X_train, y_train
 
 
+# Train only a candidate base-estimator and score it on chronological validation markets.
+def validate_model_configuration(
+    split: DatasetSplit,
+    target: TrainingTarget,
+    feature_names: Sequence[str],
+    feature_extractor_config: dict[str, Any],
+    horizon_ms: int,
+    max_target_delay_ms: int | None,
+    sample_interval_ms: int | None,
+    estimator_params: dict[str, Any],
+    progress: Callable[[str], None] | None = None,
+) -> ValidationRunResult:
+
+    task_type = get_task_type(target)
+    feature_names = tuple(feature_names)
+
+    if not feature_names:
+        raise ValueError("Select at least one feature")
+    if not split.train_paths:
+        raise ValueError("Training split is empty")
+    if not split.validation_paths:
+        raise ValueError("Validation split is empty")
+
+    #used to display progress messages in streamlit
+    def notify(message: str):
+        if progress is not None:
+            progress(message)
+
+    notify("Preparing training samples…")
+    X_train, y_train = prepare_training_data(
+        train_paths=split.train_paths,
+        feature_extractor=build_feature_extractor(feature_extractor_config),
+        feature_names=feature_names,
+        horizon_ms=horizon_ms,
+        target=target,
+        max_target_delay_ms=max_target_delay_ms,
+        sample_interval_ms=sample_interval_ms,
+    )
+
+    notify("Preparing validation samples…")
+    X_val, y_val = prepare_training_data(
+        train_paths=split.validation_paths,
+        feature_extractor=build_feature_extractor(feature_extractor_config),
+        feature_names=feature_names,
+        horizon_ms=horizon_ms,
+        target=target,
+        max_target_delay_ms=max_target_delay_ms,
+        sample_interval_ms=sample_interval_ms,
+    )
+
+    if len(X_train) == 0:
+        raise ValueError("No training samples were produced")
+    if len(X_val) == 0:
+        raise ValueError("No validation samples were produced")
+
+    if task_type == TASK_BINARY_CLASSIFICATION:
+        y_train = y_train.astype(int)
+        y_val = y_val.astype(int)
+        if len(np.unique(y_train)) < 2:
+            raise ValueError("Training data must contain both UP and DOWN labels")
+        if len(np.unique(y_val)) < 2:
+            raise ValueError("Validation data must contain both UP and DOWN labels")
+
+    notify("Fitting candidate model…")
+    candidate_model = create_estimator(task_type, estimator_params)
+    early_stopping_source = fit_candidate(
+        candidate_model,
+        X_train,
+        y_train,
+        X_val,
+        y_val,
+        early_stopping_requested=bool(estimator_params.get("early_stopping", False)),
+    )
+
+    validation_predictions = predict_raw(candidate_model, task_type, X_val)
+    validation_metrics = compute_metrics(task_type, y_val, validation_predictions)
+    selected_max_iter = int(getattr(candidate_model, "n_iter_", estimator_params["max_iter"]))
+
+    signature = build_validation_signature(
+        split=split,
+        target=target,
+        feature_names=feature_names,
+        feature_extractor_config=feature_extractor_config,
+        horizon_ms=horizon_ms,
+        max_target_delay_ms=max_target_delay_ms,
+        sample_interval_ms=sample_interval_ms,
+        estimator_params=estimator_params,
+    )
+
+    split_summary = [
+        data_summary("Train", split.train_paths, y_train),
+        data_summary("Validation", split.validation_paths, y_val),
+        data_summary("Calibration", split.calibration_paths, None),
+        data_summary("Reserved test", split.test_paths, None),
+    ]
+
+    return ValidationRunResult(
+        task_type=task_type,
+        validation_metrics=validation_metrics,
+        split_summary=split_summary,
+        configuration_signature=signature,
+        selected_max_iter=selected_max_iter,
+        early_stopping_source=early_stopping_source,
+        train_sample_count=len(y_train),
+        validation_sample_count=len(y_val),
+        validated_at=datetime.now().isoformat(timespec="seconds"),
+    )
+
+
 def extract_market_metadata(
         metadata_start: list[dict[str, Any]],
         metadata_end: list[dict[str, Any]],
@@ -619,7 +917,7 @@ def compute_metrics(task_type: str, y_true: np.ndarray, predictions: np.ndarray)
 
     # for now - only binary classifier
     y_int = y_true.astype(int)
-    clipped = np.clip(predictions, 1e-9, 1 - 1e-9) #clips close-zero to zero and close-to-one to one
+    clipped = np.clip(predictions, 1e-9, 1 - 1e-9) #clips zero to close-to-zero and one to close-to-one (because of log loss)
     metrics: dict[str, float | None] = {
         "Brier score": float(brier_score_loss(y_int, clipped)),
         "Log loss": float(log_loss(y_int, clipped, labels=[0, 1])),

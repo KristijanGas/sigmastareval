@@ -1,6 +1,9 @@
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
+
+import numpy as np
 
 @dataclass
 class OrderBookLevel:
@@ -96,3 +99,19 @@ class CryptoPrice:
 class MarketAssets:
     up_asset_id: str
     down_asset_id: str
+
+@dataclass
+class EvaluationRunResult:
+    task_type: str
+    metrics: dict[str, float | None]
+    raw_metrics: dict[str, float | None] | None
+    calibrated_metrics: dict[str, float | None] | None
+    y_true: np.ndarray
+    predictions: np.ndarray
+    raw_predictions: np.ndarray | None
+    calibrated_predictions: np.ndarray | None
+    selected_prediction_mode: str
+    has_calibration: bool
+    figures: dict[str, Any]
+    sample_count: int
+    model_path: Path

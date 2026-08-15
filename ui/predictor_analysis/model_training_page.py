@@ -12,10 +12,11 @@ from evaluator.prediction_evaluator.model_training import (
     build_validation_signature,
     get_task_type,
     train_and_save_final_model,
-    validate_model_configuration,
 )
 from evaluator.prediction_evaluator.model_training_utils import DatasetSplit, collect_market_paths, split_paths_chronologically
+from evaluator.prediction_evaluator.prediction_evaluator import validate_model_configuration
 from evaluator.prediction_evaluator.training_targets import CRYPTO_CHANGE_TARGET, OUTCOME_PROBABILITY_TARGET, TrainingTarget
+from ui.predictor_analysis.common import format_metric
 
 
 st.title("Model Training")
@@ -84,8 +85,7 @@ def experiment_row(result, target, feature_names, estimator_params):
     row.update(result.validation_metrics)  #metrics computed after validation
     return row
 
-def format_metric(value):
-    return "N/A" if value is None else f"{value:.6g}"
+
 
 
 st.session_state.setdefault("validated_model_configs", {})

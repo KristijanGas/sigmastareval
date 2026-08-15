@@ -2,7 +2,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from datetime import date, datetime, time, timedelta
-from typing import Sequence
+from typing import Any, Sequence
+
+import joblib
+import numpy as np
+from evaluator.prediction_evaluator.feature_extractor import MarketFeatureExtractor
 from evaluator.utils.utils import extract_timestamp, sort_paths_chronologically
 
 
@@ -11,6 +15,11 @@ from evaluator.utils.utils import extract_timestamp, sort_paths_chronologically
 For now mostly data preparation functions for model training
 '''
 
+
+TASK_REGRESSION = "regression"
+TASK_BINARY_CLASSIFICATION = "binary_classification"
+PREDICTION_MODE_RAW = "raw"
+PREDICTION_MODE_CALIBRATED = "calibrated"
 
 
 def collect_market_paths(
@@ -92,3 +101,41 @@ def split_paths_chronologically(paths: Sequence[Path],
         calibration_paths=list(paths[validation_end:calibration_end]),
         test_paths=list(paths[calibration_end:]),
     )
+
+
+def data_summary(name: str, paths: Sequence[Path], y: np.ndarray | None = None):
+    row: dict[str, Any] = {
+        "split": name,
+        "markets": len(paths),
+        "samples": int(len(y)) if y is not None else None,
+        "start_market": paths[0].name if paths else None,
+        "end_market": paths[-1].name if paths else None,
+    }
+    if y is not None and len(y) > 0 and set(np.unique(y)).issubset({0, 1, 0.0, 1.0}):
+        row["UP samples %"] = float(np.mean(y.astype(int)) * 100)
+    else:
+        row["UP samples %"] = None
+    return row
+
+
+def build_feature_extractor(config: dict[str, Any]) -> MarketFeatureExtractor:
+    return MarketFeatureExtractor(
+        binance_lookbacks_ms=tuple(config.get("binance_lookbacks_ms", (1000, 10000, 30000))),
+        crypto_range_windows_ms=tuple(config.get("crypto_range_windows_ms", (5000, 15000, 30000))),
+    )
+
+def load_model_artifact(path):
+    path = Path(path).expanduser()
+    loaded = joblib.load(path)
+
+    artifact = dict(loaded)
+    artifact.setdefault("calibration_method", "none")
+    artifact.setdefault("calibrator", None)
+    artifact.setdefault("has_calibrator", artifact.get("calibrator") is not None)
+    artifact.setdefault("base_estimator_type", type(artifact["base_estimator"]).__name__)
+    if artifact.get("calibrator") is not None:
+        artifact.setdefault("calibrator_type", type(artifact["calibrator"]).__name__)
+    else:
+        artifact.setdefault("calibrator_type", None)
+        
+    return artifact

@@ -15,32 +15,27 @@ def main() -> None:
    bot_analysis_page = st.Page(
       "ui/bot_analysis/analysis_page.py",
       title="Bot Analysis",
-      icon="📊",
    )
 
    comparison_page = st.Page(
       "ui/bot_analysis/comparison_page.py",
       title="Run Comparison",
-      icon="⚖️",
    )
 
    live_passive_trading_page = st.Page(
       "ui/passive_trading/live_dashboard_page.py",
       title="Live Passive Trading",
-      icon="🟢",
    )
 
    model_training_page = st.Page(
       "ui/predictor_analysis/model_training_page.py",
       title="Model Training",
-      icon="🦾",
    )
 
-   # model_evalutaion_page = st.Page(
-   #    "ui/predictor_analysis/model_evaluation_page.py",
-   #    title="Model Evaluation",
-   #    icon="📈",
-   # )
+   model_evalutaion_page = st.Page(
+      "ui/predictor_analysis/model_evaluation_page.py",
+      title="Model Evaluation",
+   )
 
 
    page = st.navigation({
@@ -53,7 +48,7 @@ def main() -> None:
       ],
       "Prediction Models": [
          model_training_page,
-         #model_evalutaion_page,
+         model_evalutaion_page,
       ],
 
    })

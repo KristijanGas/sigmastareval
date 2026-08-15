@@ -90,3 +90,17 @@ OUTCOME_PROBABILITY_TARGET = TrainingTarget[object](
     create_target=create_outcome_probability_target,
 )
 
+
+
+TARGETS: dict[str, TrainingTarget] = {
+    OUTCOME_PROBABILITY_TARGET.name: OUTCOME_PROBABILITY_TARGET,
+    CRYPTO_CHANGE_TARGET.name: CRYPTO_CHANGE_TARGET,
+}
+
+def resolve_target(target_name: str) -> TrainingTarget:
+    try:
+        return TARGETS[target_name]
+    except KeyError as exc:
+        known = ", ".join(sorted(TARGETS))
+        raise ValueError(f"Unknown target '{target_name}'. Known targets: {known}") from exc
+
