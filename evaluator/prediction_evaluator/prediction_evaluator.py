@@ -361,6 +361,7 @@ def plot_probability_histogram(y_true: np.ndarray, predictions: np.ndarray):
     fig.tight_layout()
     return fig
 
+
 def iso_to_timestamp_ms(value: str):
     dt = datetime.fromisoformat(
         value.replace("Z", "+00:00")
