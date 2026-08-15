@@ -86,6 +86,7 @@ class live_provider(historical_provider):
                     #self.binance_feed.consume()
                 if not self.scraper_only:
                     self.metadata = self.get_metadata(time_name, self.market_slug_base)
+                    time.sleep(0.5)
                     try:
                         self.set_price_to_beat(self.metadata[0]["eventMetadata"]["priceToBeat"])
                     except Exception as e:
@@ -94,7 +95,7 @@ class live_provider(historical_provider):
                         pass
                     self.update_moving_mean()
                 else:
-                    time.sleep(1)
+                    time.sleep(2)
                 #time.sleep(0.1)  # Sleep for a second before the next iteration
                 #print(self.get_best_bid(self.up_token_id), self.get_best_bid(self.down_token_id), self.get_best_ask(self.up_token_id), self.get_best_ask(self.down_token_id), self.get_crypto_value(), self.get_price_to_beat(), self.get_current_timestamp(), self.get_end_timestamp())
             #except Exception as e:
