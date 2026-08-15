@@ -251,7 +251,7 @@ class LiveDashboard:
                 print(e)
 
         timer.timeout.connect(update)
-        timer.start(20)
+        timer.start(50)
 
         win.show()
         app.exec()
