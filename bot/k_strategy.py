@@ -35,6 +35,7 @@ class KStrategy(masterbot):
         self.first_different_estimate_timestamp = None
         self.estimation_direction = 0
         self.predictor = None
+        self.prob_predictor = None
         self.last_logged_timestamp = None
         self.predictor = polynomial_predictor()
 
@@ -53,11 +54,11 @@ class KStrategy(masterbot):
         self.predictor = polynomial_predictor()
 
         # uncomment if using probability predictor
-        # if self.predictor is None:
-        #     self.predictor = initialize_predictor(market_name=self.market.base_name,
+        # if self.prob_predictor is None:
+        #     self.prob_predictor = initialize_predictor(market_name=self.market.base_name,
         #                                     lookahead_time=self.lookahead_time)
         # else:
-        #     self.predictor.reset()
+        #     self.prob_predictor.reset()
 
         self.predictor.price_to_beat = self.price_to_beat
         self.trend_alpha = 1.0
@@ -200,9 +201,8 @@ class KStrategy(masterbot):
 
         #uncomment this if using probability prediction
         # snapshot = create_snapshot(self.data_provider)
-        # self.predictor.update(snapshot=snapshot)
-        # # predicted_trend = self.predictor.predict(snapshot=snapshot)
-        # predicted_prob = self.predictor.predict_up_probability(snapshot=snapshot)
+        # self.prob_predictor.update(snapshot=snapshot)
+        # predicted_prob = self.prob_predictor.predict_up_probability(snapshot=snapshot)
 
 
         
