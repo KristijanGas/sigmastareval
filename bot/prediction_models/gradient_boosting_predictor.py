@@ -3,8 +3,11 @@ from dataclasses import dataclass
 from typing import Any
 from sklearn.ensemble import HistGradientBoostingRegressor, HistGradientBoostingClassifier
 from evaluator.prediction_evaluator.feature_extractor import ExtractedMarketState, MarketFeatureExtractor
+from evaluator.prediction_evaluator.model_training_utils import load_model_artifact
 from evaluator.prediction_evaluator.prediction_eval_dataclasses import MarketSnapshot, NumericPrediction
 import joblib
+
+from evaluator.prediction_evaluator.training_targets import resolve_target
 
 class GradientBoostingPredictor:
 
@@ -132,8 +135,8 @@ class GradientBoostingPredictor:
       feature_row = extracted.features.select_row(self.feature_names)
       if self.target_name == "outcome_probability":
          prediction = self.model.predict_proba(feature_row)[0,1]
-      else:
-         prediction = float(self.model.predict(feature_row)[0])
+      # else:
+      #    prediction = float(self.model.predict(feature_row)[0])
 
 
       if self.target_name == "midpoint_change":
@@ -160,8 +163,18 @@ class GradientBoostingPredictor:
             predicted_probability=prediction,
          )
 
+   def predict_up_probability(self, snapshot: MarketSnapshot):
+      if self.model is None:
+         return None
+      prediction = self.make_prediction(snapshot=snapshot)
+      if prediction is None:
+         return None
+      predicted_probability = prediction.predicted_value
+      if predicted_probability is None:
+         return None
+      return predicted_probability
 
-
+   #used for trend prediction
    def predict(self, snapshot: MarketSnapshot):
       if self.model is None:
          return 0
@@ -346,15 +359,22 @@ def initialize_predictor(lookahead_time, market_name):
       #"binance_acceleration_1s_5s",
    )  
 
-   #model = joblib.load("bot/models/trend_model.joblib")
-   model = get_model(market_name=market_name)
+   artifact = get_model_artifact(market_name=market_name)
+   #artifact = load_model_artifact(model_path)
+
+   target = resolve_target(artifact["target_name"])
+   feature_names = tuple(artifact.get("feature_names", ()))
+   base_model = artifact["base_estimator"]
+   lookahead_time = artifact["horizon_ms"]
+
+   #model = get_model(market_name=market_name)
    #print(model)
    predictor = GradientBoostingPredictor(
-      model=model,
-      feature_extractor=MarketFeatureExtractor(binance_lookbacks_ms=(1000,3000)),
+      model=base_model,
+      feature_extractor=MarketFeatureExtractor(),
       horizon_ms=lookahead_time,
-      target_name="normalized_crypto_trend",
-      gradient_boosting_features=GRADIENT_BOOSTING_FEATURES,
+      target_name=target.name,
+      gradient_boosting_features=feature_names,
       training_samples=None,
       market_name=market_name,
    )
@@ -380,4 +400,19 @@ def get_model(market_name):
    #print(market_name)
    return model
 
-#vidjeti je li se koristi pravi model
+def get_model_artifact(market_name):
+   if market_name == "bitcoin-up-or-down":
+      artifact = load_model_artifact("bot/trained_models/outcome_probability_model_btc.joblib")
+      print("bitcoin model loaded")
+   elif market_name == "ethereum-up-or-down":
+      artifact = load_model_artifact("bot/trained_models/outcome_probability_model_eth.joblib")
+      print("ethereum model loaded")
+   elif market_name == "solana-up-or-down":
+      artifact = load_model_artifact("bot/trained_models/outcome_probability_model_sol.joblib")
+      print("solana model loaded")
+   elif market_name == "xrp-up-or-down":
+      artifact = load_model_artifact("bot/trained_models/outcome_probability_model_xrp.joblib")
+      print("xrp model loaded")
+   else:
+      artifact = None
+   return artifact

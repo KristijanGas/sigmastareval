@@ -247,14 +247,14 @@ def load_order_books(data_provider: historical_provider, timestamp):
     raw_up_book["asks"] = data_provider.get_asset(up_asset_id, "asks")
     raw_up_book["asset_id"] = up_asset_id
     raw_up_book["timestamp"] = timestamp
-    up_book = parse_order_book(raw_up_book)
+    up_book = parse_order_book(raw_up_book, up_asset_id)
 
     raw_down_book = {}
     raw_down_book["bids"] = data_provider.get_asset(down_asset_id, "bids")
     raw_down_book["asks"] = data_provider.get_asset(down_asset_id, "asks")
     raw_down_book["asset_id"] = down_asset_id
     raw_down_book["timestamp"] = timestamp
-    down_book = parse_order_book(raw_down_book)
+    down_book = parse_order_book(raw_down_book, down_asset_id)
 
     return up_book, down_book
 

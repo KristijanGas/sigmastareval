@@ -11,10 +11,11 @@ from bot.order_types import OrderType
 from bot.masterbot import masterbot
 from bot.order_actions import OrderAction
 from bot.order_types import OrderType
-#from bot.prediction_models.gradient_boosting_predictor import initialize_predictor
 from bot.prediction_models.polynomial_predictor import polynomial_predictor
 from data_provider.historical_provider import historical_provider
-#from evaluator.prediction_evaluator.snapshot_builder import create_snapshot
+
+# from evaluator.prediction_evaluator.snapshot_builder import create_snapshot
+# from bot.prediction_models.gradient_boosting_predictor import initialize_predictor
 
 class KStrategy(masterbot):
     def __init__(self, in_production=False, market=None, data_provider: historical_provider = None):
@@ -34,6 +35,7 @@ class KStrategy(masterbot):
         self.first_different_estimate_timestamp = None
         self.estimation_direction = 0
         self.predictor = None
+        self.prob_predictor = None
         self.last_logged_timestamp = None
         self.predictor = polynomial_predictor()
 
@@ -50,11 +52,14 @@ class KStrategy(masterbot):
     def first_run_setup(self):
         super().first_run_setup()
         self.predictor = polynomial_predictor()
-        # if self.predictor is None:
-        #     self.predictor = initialize_predictor(market_name=self.market.base_name,
+
+        # uncomment if using probability predictor
+        # if self.prob_predictor is None:
+        #     self.prob_predictor = initialize_predictor(market_name=self.market.base_name,
         #                                     lookahead_time=self.lookahead_time)
         # else:
-        #     self.predictor.reset()
+        #     self.prob_predictor.reset()
+
         self.predictor.price_to_beat = self.price_to_beat
         self.trend_alpha = 1.0
     
@@ -194,9 +199,12 @@ class KStrategy(masterbot):
         '''
         #print(predicted_trend)
 
+        #uncomment this if using probability prediction
         # snapshot = create_snapshot(self.data_provider)
-        # self.predictor.update(snapshot=snapshot)
-        # predicted_trend = self.predictor.predict(snapshot=snapshot)
+        # self.prob_predictor.update(snapshot=snapshot)
+        # predicted_prob = self.prob_predictor.predict_up_probability(snapshot=snapshot)
+
+
         
         if time_factor < 0.01:
             time_factor = 0.01
