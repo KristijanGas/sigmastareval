@@ -1,6 +1,8 @@
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import hashlib
 import math
 from dataclasses import asdict, is_dataclass
+import os
 from pathlib import Path
 import sys
 import time
@@ -53,12 +55,9 @@ def load_market_analyzer(path_string: str, initial_balance: float, modified_time
 ) -> tuple[PerformanceAnalyzer, Any]:
 
     del modified_time_ns
-    path = Path(path_string)
-
-    with st.spinner(f"Analyzing {path.name}..."):
-        analyzer = PerformanceAnalyzer(initial_balance=initial_balance)
-        analyzer.analytics_path = Path(path_string)
-        result = analyzer.analyze()
+    analyzer = PerformanceAnalyzer(initial_balance=initial_balance)
+    analyzer.analytics_path = Path(path_string)
+    result = analyzer.analyze()
 
     return analyzer, result
 
@@ -98,23 +97,34 @@ def load_all_markets(paths: list[Path], initial_balance: float
     errors: list[dict[str, str]] = []
 
     progress = st.progress(0, text="Loading markets...") if paths else None
-
+    jobs = []
+    thread_count = os.cpu_count() or 1
     for index, path in enumerate(paths, start=1):
+        jobs.append((str(path.resolve()), float(initial_balance), path.stat().st_mtime_ns))
+    cnt = 0
+    with ThreadPoolExecutor(max_workers=thread_count) as executor:
+        future_to_path = {
+            executor.submit(load_market_analyzer, *job): Path(job[0])
+            for job in jobs
+        }
         # if progress is not None:
         #    progress.progress((index - 1) / len(paths), text=f"Loading market {index}/{len(paths)}...") 
+        for future in as_completed(future_to_path):
+            path = future_to_path[future]
+            try:
+                analyzer, result = future.result()
+            except Exception as exc:
+                errors.append({"path": str(path), "error": f"{type(exc).__name__}: {exc}"})
+                continue
 
-        try:
-            analyzer, result = load_market_analyzer(str(path.resolve()), float(initial_balance), path.stat().st_mtime_ns)
             market_name = result.market_name
             analyzers[market_name] = analyzer
             results[market_name] = result
             records.append(market_record(path, result))
-        except Exception as exc:  # one malformed analysis file should not stop the app
-            errors.append({"file": str(path), "error": f"{type(exc).__name__}: {exc}"})
-            st.error("There was a problem loading market data. Try using newer data.")
 
-        if progress is not None:
-            progress.progress(index / len(paths), text=f"Loaded {index}/{len(paths)} markets")
+            cnt += 1
+            if progress is not None:
+                progress.progress(cnt / len(paths), text=f"Loaded {cnt}/{len(paths)} markets")
 
     if progress is not None:
         progress.empty()
