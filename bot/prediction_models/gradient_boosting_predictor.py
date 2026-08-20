@@ -1,11 +1,23 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
+import os
+
+#prevent sklearn to spawn more than 1 extra thread per process
+# improves parallelised replay engine runs with predictors
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+import numpy as np
 from sklearn.ensemble import HistGradientBoostingRegressor, HistGradientBoostingClassifier
 from evaluator.prediction_evaluator.feature_extractor import ExtractedMarketState, MarketFeatureExtractor
 from evaluator.prediction_evaluator.model_training_utils import load_model_artifact
 from evaluator.prediction_evaluator.prediction_eval_dataclasses import MarketSnapshot, NumericPrediction
 import joblib
+import time
+
+from threadpoolctl import threadpool_info
+from pprint import pprint
 
 from evaluator.prediction_evaluator.training_targets import resolve_target
 
@@ -133,11 +145,16 @@ class GradientBoostingPredictor:
          return None
 
       feature_row = extracted.features.select_row(self.feature_names)
+      feature_row = np.asarray(feature_row)
+
+      # pprint(threadpool_info())
+      # start = time.perf_counter()
+
       if self.target_name == "outcome_probability":
          prediction = self.model.predict_proba(feature_row)[0,1]
-      # else:
-      #    prediction = float(self.model.predict(feature_row)[0])
 
+      # end = time.perf_counter()
+      # print(f"Execution time: {end - start:.6f} seconds")
 
       if self.target_name == "midpoint_change":
          return self.create_midpoint_prediction(

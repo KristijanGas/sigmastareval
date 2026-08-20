@@ -34,8 +34,6 @@ KNOWN_FEATURES = (
     "imbalance_top_5",
     "bid_volume_top_2",
     "ask_volume_top_2",
-    "bid_volume_top_5",
-    "ask_volume_top_5",
     "binance_return_1000",
     "binance_return_3000",
     "binance_return_10000",
@@ -174,7 +172,7 @@ with st.container(border=True):
     selected_features = st.multiselect(
         "Model features",
         options=KNOWN_FEATURES,
-        default=["current_midpoint", "bid_volume_top_5", "ask_volume_top_5"],
+        default=["current_midpoint", "bid_volume_top_2", "ask_volume_top_2"],
     )
 
     custom_features_text = st.text_area(
@@ -187,10 +185,10 @@ with st.container(border=True):
 
     col1, col2 = st.columns(2)
     binance_lookbacks_text = col1.text_input(
-        "Binance lookbacks (ms)", value="1000, 10000, 30000"
+        "Binance lookbacks (ms)", value="1000, 3000"
     )
     crypto_range_windows_text = col2.text_input(
-        "Crypto range windows (ms)", value="5000, 15000, 30000"
+        "Crypto range windows (ms)", value="5000"
     )
 
 with st.container(border=True):

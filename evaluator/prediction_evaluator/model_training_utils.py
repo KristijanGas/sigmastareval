@@ -120,8 +120,8 @@ def data_summary(name: str, paths: Sequence[Path], y: np.ndarray | None = None):
 
 def build_feature_extractor(config: dict[str, Any]) -> MarketFeatureExtractor:
     return MarketFeatureExtractor(
-        binance_lookbacks_ms=tuple(config.get("binance_lookbacks_ms", (1000, 10000, 30000))),
-        crypto_range_windows_ms=tuple(config.get("crypto_range_windows_ms", (5000, 15000, 30000))),
+        # binance_lookbacks_ms=tuple(config.get("binance_lookbacks_ms", (1000, 10000, 30000))),
+        # crypto_range_windows_ms=tuple(config.get("crypto_range_windows_ms", (5000, 15000, 30000))),
     )
 
 def load_model_artifact(path):

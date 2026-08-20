@@ -45,11 +45,11 @@ class ExtractedMarketState:
 class MarketFeatureExtractor:
    def __init__(
       self,
-      midpoint_lookbacks_ms: Sequence[int] = (3000, 10000, 30000),
-      binance_lookbacks_ms: Sequence[int] = (3000, 10000, 30000),
-      imbalance_levels: Sequence[int] = (2,3,5),
-      crypto_range_windows_ms: Sequence[int] = (10000, 30000),
-      binance_volatility_windows_ms=(10000, 15000),
+      midpoint_lookbacks_ms: Sequence[int] = (),
+      binance_lookbacks_ms: Sequence[int] = (),
+      imbalance_levels: Sequence[int] = (2,),
+      crypto_range_windows_ms: Sequence[int] = (),
+      binance_volatility_windows_ms=(15000,),
 
       max_lookup_delay_ms = 5000):
          self.midpoint_lookbacks_ms = self._validate_windows(
