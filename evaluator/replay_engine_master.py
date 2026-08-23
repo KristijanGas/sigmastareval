@@ -23,7 +23,7 @@ for dataset in dataset_paths:
             continue
         files.append(file)
 
-process_count = 6
+process_count = 2
 partition_size = len(files) // process_count
 partition_remainder_size = len(files) - partition_size * process_count
 file_partitions = []

@@ -82,7 +82,7 @@ def main():
     best_roi = config_data.get("best_roi", -1.0)
     current_parameters = config_data.get("parameters", {})
     parameters_metadata = config_data.get("parameters_metadata", {})
-    thread_count = 10
+    thread_count = 2
     step = 51
     should_store = True
     while True:

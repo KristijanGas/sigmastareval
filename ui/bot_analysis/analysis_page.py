@@ -30,7 +30,7 @@ from analytics.performance_analyzer import PerformanceAnalyzer
 
 
 APP_TITLE = "Bot Performance Analysis"
-DEFAULT_ANALYSIS_DIRECTORY = "tmp/bitcoin-up-or-down"
+DEFAULT_ANALYSIS_DIRECTORY = "ui/bot_analysis/demonstration_analysis"
 
 # To install required modules: python -m pip install -r requirements-streamlit.txt
 # Run command: streamlit run analytics/streamlit-performance-dashboard.py
@@ -39,10 +39,10 @@ DEFAULT_ANALYSIS_DIRECTORY = "tmp/bitcoin-up-or-down"
 def find_analysis_files(directory: Path) -> list[Path]:
     paths = []
     #print(directory)
-    if str(directory).startswith("tmp"):
+    if not str(directory).startswith("live_runs/passive"):
         for path in Path(directory).glob("*.analysis.json"):
             paths.append(path)
-    elif str(directory).startswith("live_runs/passive"):
+    else:
         for path in Path(directory).glob("*.json.gz"):
             paths.append(path)
     return paths
