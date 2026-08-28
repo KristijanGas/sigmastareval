@@ -121,4 +121,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-#python evaluator/parameter_adjuster.py bot/k_strategy.py bot/configs/KStrategy/bitcoin-up-or-down.cfg datasets/bitcoin-up-or-down august-3-2026-12pm-et
+#python evaluator/parameter_adjuster.py bot/k_strategy.py bot/configs/KStrategy/bitcoin-up-or-down.cfg datasets/bitcoin-up-or-down august-15-2026-12pm-et

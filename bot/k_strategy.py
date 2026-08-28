@@ -48,6 +48,8 @@ class KStrategy(masterbot):
         self.lookahead_time = None
         self.edge_threshold = None
         self.crypto_price_stdev = None
+        self.spread_cross = None
+        self.avoid_discovery_factor = None
 
     def first_run_setup(self):
         super().first_run_setup()
@@ -92,10 +94,10 @@ class KStrategy(masterbot):
         dif_down_shares = wanted_down_shares - self.down_shares
         if dif_up_shares > 0:
             dif_up_shares = min(dif_up_shares, self.data_provider.can_buy_with(self.up_token_id, self.get_usable_cash()))
-            self.place_order_with_cash_check(OrderType.GTD, self.up_token_id, OrderAction.BID, dif_up_shares, self.up_price + 0.03, timeout=1000)
+            self.place_order_with_cash_check(OrderType.GTD, self.up_token_id, OrderAction.BID, dif_up_shares, self.up_price + self.spread_cross, timeout=1000)
         if dif_down_shares > 0:
             dif_down_shares = min(dif_down_shares, self.data_provider.can_buy_with(self.down_token_id, self.get_usable_cash()))
-            self.place_order_with_cash_check(OrderType.GTD, self.down_token_id, OrderAction.BID, dif_down_shares, self.down_price + 0.03, timeout=1000)
+            self.place_order_with_cash_check(OrderType.GTD, self.down_token_id, OrderAction.BID, dif_down_shares, self.down_price + self.spread_cross, timeout=1000)
         if dif_up_shares < 0:
             self.place_order_with_cash_check(OrderType.GTD, self.up_token_id, OrderAction.ASK, -dif_up_shares, max(projected_up_value,0.01), timeout=1000)
         if dif_down_shares < 0:
@@ -226,9 +228,9 @@ class KStrategy(masterbot):
         #desired_shares = min(desired_shares, self.data_provider.can_buy_with(self.up_token_id, self.get_usable_cash()))
         #desired_shares = min(desired_shares, self.data_provider.can_buy_with(self.down_token_id, self.get_usable_cash()))
         desired_shares = max(desired_shares, 5)
-        if edge_up > self.edge_threshold * (1 + 2 * time_factor):
+        if edge_up > self.edge_threshold * (1 + self.avoid_discovery_factor * time_factor):
             self.manage_desired_inventory(desired_shares, 0, projected_up_value, projected_down_value)
-        elif edge_down > self.edge_threshold * (1 + 2 * time_factor):
+        elif edge_down > self.edge_threshold * (1 + self.avoid_discovery_factor * time_factor):
             self.manage_desired_inventory(0, desired_shares, projected_up_value, projected_down_value)
         self.update_estimation_alpha(current_timestamp, self.up_price, projected_up_value)
 
