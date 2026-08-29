@@ -14,7 +14,7 @@ for dataset in dataset_paths:
     for data_file in Path(dataset).glob("*.gz"):
         print(f"Found data file: {data_file}")
         file = data_file.resolve()
-        newer_than_time = "august-3-2026-12pm-et"
+        newer_than_time = "august-15-2026-12pm-et"
         #newer_than_time = None
         #file_creation_date = data_file.stat().st_ctime
         #if newer_than_time is not None and file_creation_date < time.time() - newer_than_time:
