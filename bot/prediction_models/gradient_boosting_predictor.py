@@ -13,6 +13,7 @@ from sklearn.ensemble import HistGradientBoostingRegressor, HistGradientBoosting
 from evaluator.prediction_evaluator.feature_extractor import ExtractedMarketState, MarketFeatureExtractor
 from evaluator.prediction_evaluator.model_training_utils import load_model_artifact
 from evaluator.prediction_evaluator.prediction_eval_dataclasses import MarketSnapshot, NumericPrediction
+from bot.prediction_models.prediction_targets import PredictionTarget
 import joblib
 import time
 
@@ -64,7 +65,7 @@ class GradientBoostingPredictor:
          raise TypeError("model must provide a predict(X) method.")
 
       self.model = model
-      
+      self.last_prediction = None
       self.feature_extractor = feature_extractor
       self.clip_predictions = clip_predictions
       self.crypto_price_stdev = {"bitcoin-up-or-down": 300, "ethereum-up-or-down": 10.4, "solana-up-or-down": 0.6, "xrp-up-or-down": 0.0068,
@@ -147,14 +148,30 @@ class GradientBoostingPredictor:
       feature_row = extracted.features.select_row(self.feature_names)
       feature_row = np.asarray(feature_row)
 
-      # pprint(threadpool_info())
-      # start = time.perf_counter()
+      #dont waste time on predicting again if the features are unchanged
+      if self.last_prediction is not None and ((feature_row[0]==self.last_prediction[0][0]).all() or all((abs(a - b)/b < 0.005) for a, b in zip(feature_row[0], self.last_prediction[0][0]) if b > 0)):
+         # print(feature_row[0])
+         # print(self.last_prediction[0][0])
 
-      if self.target_name == "outcome_probability":
-         prediction = self.model.predict_proba(feature_row)[0,1]
+         prediction = self.last_prediction[1]
 
-      # end = time.perf_counter()
-      # print(f"Execution time: {end - start:.6f} seconds")
+         #old_prediction = self.last_prediction[1]
+         # prediction = self.model.predict_proba(feature_row)[0,1]
+         # if abs(old_prediction - prediction) > 0.001:
+         #    print(old_prediction - prediction)
+      else:
+         #print(feature_row[0])
+         # pprint(threadpool_info())
+         # start = time.perf_counter()
+
+         if self.target_name == "outcome_probability":
+            prediction = self.model.predict_proba(feature_row)[0,1]
+
+
+         self.last_prediction = (feature_row, prediction)
+
+         # end = time.perf_counter()
+         # print(f"Execution time: {end - start:.6f} seconds")
 
       if self.target_name == "midpoint_change":
          return self.create_midpoint_prediction(
@@ -162,11 +179,6 @@ class GradientBoostingPredictor:
                predicted_change=prediction,
          )
 
-      # if self.target_name == "crypto_change":
-      #    return self._create_crypto_change_prediction(
-      #          extracted=extracted,
-      #          predicted_change=prediction,
-      #    )
 
       if self.target_name == "normalized_crypto_trend":
          return self.create_normalized_trend_prediction(
@@ -180,30 +192,69 @@ class GradientBoostingPredictor:
             predicted_probability=prediction,
          )
 
-   def predict_up_probability(self, snapshot: MarketSnapshot):
+   def predict_up_probability(self, feature_row):
       if self.model is None:
          return None
-      prediction = self.make_prediction(snapshot=snapshot)
-      if prediction is None:
-         return None
-      predicted_probability = prediction.predicted_value
+      predicted_probability = self.model.predict_proba(feature_row)[0,1]
       if predicted_probability is None:
          return None
       return predicted_probability
 
    #used for trend prediction
-   def predict(self, snapshot: MarketSnapshot):
+   def predict_normalized_crypto_trend(self, feature_row):
       if self.model is None:
          return 0
 
-      prediction = self.make_prediction(snapshot=snapshot)
+      prediction = self.model.predict(feature_row)
       if prediction is None:
             predicted_trend = 0
-            #print("none")
       else:
-            predicted_trend = prediction.predicted_value
-            #print(predicted_trend)
+            volatility = self.crypto_price_stdev.get(self.market_name)
+            predicted_trend = prediction / volatility
+
       return predicted_trend
+
+
+
+   def predict(self, snapshot: MarketSnapshot):
+      extracted = self.feature_extractor.extract_market_features(snapshot)
+      if extracted is None:
+         return None
+
+      missing_features = extracted.features.missing(self.feature_names)
+
+      if missing_features:
+         # Not enough history or source data to create all features expected by this model
+         return None
+
+      feature_row = extracted.features.select_row(self.feature_names)
+      feature_row = np.asarray(feature_row)
+
+      #dont waste time on predicting again if the features are unchanged
+      if self.last_prediction is not None and ((feature_row[0]==self.last_prediction[0][0]).all() or all((abs(a - b)/b < 0.005) for a, b in zip(feature_row[0], self.last_prediction[0][0]) if b > 0)):
+         prediction = self.last_prediction[1]
+         return prediction
+
+
+      if self.target_name == "outcome_probability":
+         prediction = self.predict_up_probability(feature_row=feature_row)
+
+      # if self.target_name == "midpoint_change":
+      #    prediction_extended = self.create_midpoint_prediction(
+      #          extracted=extracted,
+      #          predicted_change=prediction,
+      #    )
+
+      if self.target_name == "normalized_crypto_trend":
+         prediction = self.predict_normalized_crypto_trend(feature_row=feature_row)
+         # prediction_extended = self.create_normalized_trend_prediction(
+         #       extracted=extracted,
+         #       predicted_crypto_change=prediction,
+         # )
+
+
+      self.last_prediction = (feature_row, prediction)
+      return prediction
 
 
 
@@ -235,11 +286,6 @@ class GradientBoostingPredictor:
                predicted_change=prediction,
          )
 
-      # if self.target_name == "crypto_change":
-      #    return self._create_crypto_change_prediction(
-      #          extracted=extracted,
-      #          predicted_change=prediction,
-      #    )
 
       if self.target_name == "normalized_crypto_trend":
          return self.create_normalized_trend_prediction(
@@ -361,22 +407,23 @@ class GradientBoostingPredictor:
       return min(1.0, max(0.0, midpoint))
    
 
+# old function for directly initializing a predictor inside of a trading bot strategy
 def initialize_predictor(lookahead_time, market_name):
-   GRADIENT_BOOSTING_FEATURES = (
-      "binance_return_1000",
-      "binance_return_3000",
-      #"binance_range_position_5000",
-      #"binance_range_position_30000",
-      #"binance_return_volatility_10000",
-      #"binance_return_volatility_20000",
-      #"binance_relative_high_distance_5000",
-      #"binance_relative_low_distance_5000",
-      #"binance_range_position_7000"
-      #"binance_return_5000",
-      #"binance_acceleration_1s_5s",
-   )  
+   # GRADIENT_BOOSTING_FEATURES = (
+   #    "binance_return_1000",
+   #    "binance_return_3000",
+   #    #"binance_range_position_5000",
+   #    #"binance_range_position_30000",
+   #    #"binance_return_volatility_10000",
+   #    #"binance_return_volatility_20000",
+   #    #"binance_relative_high_distance_5000",
+   #    #"binance_relative_low_distance_5000",
+   #    #"binance_range_position_7000"
+   #    #"binance_return_5000",
+   #    #"binance_acceleration_1s_5s",
+   # )  
 
-   artifact = get_model_artifact(market_name=market_name)
+   artifact = get_model_artifact_outcome_probability(market_name=market_name)
    #artifact = load_model_artifact(model_path)
 
    target = resolve_target(artifact["target_name"])
@@ -396,6 +443,40 @@ def initialize_predictor(lookahead_time, market_name):
       market_name=market_name,
    )
    return predictor
+
+
+def initialize_gradient_boosting_predictor(prediction_target, market_name):
+   old_model_version = False
+   if prediction_target == PredictionTarget.MIDPOINT_CHANGE:
+      print("No trained midpoint_change models available currently")
+      #artifact = get_model_artifact_midpoint(market_name)
+      return None
+   elif prediction_target == PredictionTarget.OUTCOME_PROBABILITY:
+      artifact = get_model_artifact_outcome_probability(market_name)
+   elif prediction_target == PredictionTarget.NORMALIZED_CRYPTO_TREND:
+      print("No trained normalized_crypto_trend models available currently")
+      return None
+      artifact = get_model_artifact_crypto_trend(market_name)
+      
+
+
+   target = resolve_target(artifact["target_name"])
+   feature_names = tuple(artifact.get("feature_names", ()))
+   base_model = artifact["base_estimator"]
+   lookahead_time = artifact["horizon_ms"]
+
+   predictor = GradientBoostingPredictor(
+      model=base_model,
+      feature_extractor=MarketFeatureExtractor(),
+      horizon_ms=lookahead_time,
+      target_name=target.name,
+      gradient_boosting_features=feature_names,
+      training_samples=None,
+      market_name=market_name,
+   )
+
+   return predictor
+
 
 def get_model(market_name):
    if market_name == "bitcoin-up-or-down":
@@ -417,19 +498,59 @@ def get_model(market_name):
    #print(market_name)
    return model
 
-def get_model_artifact(market_name):
+
+def get_model_artifact_outcome_probability(market_name):
    if market_name == "bitcoin-up-or-down":
-      artifact = load_model_artifact("bot/trained_models/outcome_probability_model_btc.joblib")
-      print("bitcoin model loaded")
+      artifact = load_model_artifact("bot/trained_models/outcome_probability/outcome_probability_model_btc.joblib")
+      print("bitcoin outcome probability model loaded")
    elif market_name == "ethereum-up-or-down":
-      artifact = load_model_artifact("bot/trained_models/outcome_probability_model_eth.joblib")
-      print("ethereum model loaded")
+      artifact = load_model_artifact("bot/trained_models/outcome_probability/outcome_probability_model_eth.joblib")
+      print("ethereum outcome probability model loaded")
    elif market_name == "solana-up-or-down":
-      artifact = load_model_artifact("bot/trained_models/outcome_probability_model_sol.joblib")
-      print("solana model loaded")
+      artifact = load_model_artifact("bot/trained_models/outcome_probability/outcome_probability_model_sol.joblib")
+      print("solana outcome probability model loaded")
    elif market_name == "xrp-up-or-down":
-      artifact = load_model_artifact("bot/trained_models/outcome_probability_model_xrp.joblib")
-      print("xrp model loaded")
+      artifact = load_model_artifact("bot/trained_models/outcome_probability/outcome_probability_model_xrp.joblib")
+      print("xrp outcome probability model loaded")
    else:
       artifact = None
    return artifact
+
+
+
+# def get_model_artifact_midpoint(market_name):
+#    if market_name == "bitcoin-up-or-down":
+#       artifact = load_model_artifact("bot/trained_models/outcome_probability_model_new.joblib")
+#       print("bitcoin midpoint model loaded")
+#    elif market_name == "ethereum-up-or-down":
+#       artifact = load_model_artifact("bot/trained_models/outcome_probability_model_eth.joblib")
+#       print("ethereum midpoint model loaded")
+#    elif market_name == "solana-up-or-down":
+#       artifact = load_model_artifact("bot/trained_models/outcome_probability_model_sol.joblib")
+#       print("solana midpoint model loaded")
+#    elif market_name == "xrp-up-or-down":
+#       artifact = load_model_artifact("bot/trained_models/outcome_probability_model_xrp.joblib")
+#       print("xrp midpoint model loaded")
+#    else:
+#       artifact = None
+#    return artifact
+
+
+def get_model_artifact_crypto_trend(market_name):
+   print("Not implemented yet.")
+   return None
+   # if market_name == "bitcoin-up-or-down":
+   #    artifact = load_model_artifact("bot/trained_models/normalized_crypto_trend/trend_model_btc_2.joblib")
+   #    print("bitcoin crypto trend model loaded")
+   # elif market_name == "ethereum-up-or-down":
+   #    artifact = load_model_artifact("bot/trained_models/normalized_crypto_trend/trend_model_eth_2.joblib")
+   #    print("ethereum crypto trend model loaded")
+   # elif market_name == "solana-up-or-down":
+   #    artifact = load_model_artifact("bot/trained_models/normalized_crypto_trend/trend_model_sol_2.joblib")
+   #    print("solana crypto trend model loaded")
+   # elif market_name == "xrp-up-or-down":
+   #    artifact = load_model_artifact("bot/trained_models/normalized_crypto_trend/trend_model_xrp_2.joblib")
+   #    print("xrp crypto trend model loaded")
+   # else:
+   #    artifact = None
+   # return artifact
