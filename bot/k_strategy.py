@@ -15,7 +15,8 @@ from bot.prediction_models.polynomial_predictor import polynomial_predictor
 from data_provider.historical_provider import historical_provider
 
 # from evaluator.prediction_evaluator.snapshot_builder import create_snapshot
-# from bot.prediction_models.gradient_boosting_predictor import initialize_predictor
+# from bot.prediction_service import PredictionService
+# from bot.prediction_models.prediction_targets import PredictionTarget
 
 class KStrategy(masterbot):
     def __init__(self, in_production=False, market=None, data_provider: historical_provider = None):
@@ -36,6 +37,7 @@ class KStrategy(masterbot):
         self.estimation_direction = 0
         self.predictor = None
         self.prob_predictor = None
+        self.prediction_service = None
         self.last_logged_timestamp = None
         self.predictor = polynomial_predictor()
 
@@ -55,12 +57,17 @@ class KStrategy(masterbot):
         super().first_run_setup()
         self.predictor = polynomial_predictor()
 
-        # uncomment if using probability predictor
-        # if self.prob_predictor is None:
-        #     self.prob_predictor = initialize_predictor(market_name=self.market.base_name,
-        #                                     lookahead_time=self.lookahead_time)
+        #uncomment if using prediction service (prediction models)
+        # if self.prediction_service is None:
+        #     self.prediction_service = PredictionService(
+        #         market_name=self.market.base_name,
+        #         selected_prediction_targets=[
+        #             PredictionTarget.OUTCOME_PROBABILITY,
+        #             #PredictionTarget.NORMALIZED_CRYPTO_TREND,     # not avaliable yet
+        #         ]
+        #     )
         # else:
-        #     self.prob_predictor.reset()
+        #     self.prediction_service.reset()
 
         self.predictor.price_to_beat = self.price_to_beat
         self.trend_alpha = 1.0
@@ -201,10 +208,11 @@ class KStrategy(masterbot):
         '''
         #print(predicted_trend)
 
-        #uncomment this if using probability prediction
+        #uncomment this if using prediction service
         # snapshot = create_snapshot(self.data_provider)
-        # self.prob_predictor.update(snapshot=snapshot)
-        # predicted_prob = self.prob_predictor.predict_up_probability(snapshot=snapshot)
+        # self.prediction_service.update(snapshot=snapshot)
+        # predicted_prob = self.prediction_service.predict_outcome_probability(snapshot=snapshot)
+
 
 
         
