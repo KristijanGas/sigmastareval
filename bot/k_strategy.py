@@ -217,9 +217,9 @@ class KStrategy(masterbot):
 
 
         # print("up:")
-        midpoint_change_up = self.predictor.predict_midpoint_up(lookahead_time=5000, current_timestamp=current_timestamp, current_midpoint=self.up_price)
+        # midpoint_change_up = self.predictor.predict_midpoint_up(lookahead_time=5000, current_timestamp=current_timestamp, current_midpoint=self.up_price)
         # print("down:")
-        midpoint_change_down = self.predictor.predict_midpoint_down(lookahead_time=5000, current_timestamp=current_timestamp, current_midpoint=self.down_price)
+        # midpoint_change_down = self.predictor.predict_midpoint_down(lookahead_time=5000, current_timestamp=current_timestamp, current_midpoint=self.down_price)
 
 
 
