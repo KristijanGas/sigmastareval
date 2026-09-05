@@ -39,7 +39,8 @@ class KStrategy(masterbot):
         self.prob_predictor = None
         self.prediction_service = None
         self.last_logged_timestamp = None
-        self.predictor = polynomial_predictor()
+        #self.predictor = polynomial_predictor()
+        self.predictor = None
 
         #parameters
         self.investment_cash_percent = 0.2
@@ -55,7 +56,7 @@ class KStrategy(masterbot):
 
     def first_run_setup(self):
         super().first_run_setup()
-        self.predictor = polynomial_predictor()
+        #self.predictor = None
 
         #uncomment if using prediction service (prediction models)
         # if self.prediction_service is None:
@@ -212,6 +213,13 @@ class KStrategy(masterbot):
         # snapshot = create_snapshot(self.data_provider)
         # self.prediction_service.update(snapshot=snapshot)
         # predicted_prob = self.prediction_service.predict_outcome_probability(snapshot=snapshot)
+
+
+
+        # print("up:")
+        midpoint_change_up = self.predictor.predict_midpoint_up(lookahead_time=5000, current_timestamp=current_timestamp, current_midpoint=self.up_price)
+        # print("down:")
+        midpoint_change_down = self.predictor.predict_midpoint_down(lookahead_time=5000, current_timestamp=current_timestamp, current_midpoint=self.down_price)
 
 
 
